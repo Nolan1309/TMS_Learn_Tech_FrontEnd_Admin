@@ -1,0 +1,31 @@
+/* Courses Styles
+.course-card {
+  margin-bottom: 16px;
+  transition: all 0.3s;
+}
+
+.course-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.course-image {
+  height: 200px;
+  object-fit: cover;
+}
+
+.course-price {
+  font-weight: bold;
+  color: #1890ff;
+}
+
+.course-status-active {
+  color: #52c41a;
+}
+
+.course-status-draft {
+  color: #faad14;
+}
+
+.ck-editor__editable {
+  min-height: 200px;
+}  */

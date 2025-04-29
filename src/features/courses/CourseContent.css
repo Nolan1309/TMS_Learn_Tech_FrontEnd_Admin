@@ -1,0 +1,28 @@
+/* CourseContent Styles
+.chapter-item {
+  margin-bottom: 16px;
+}
+
+.lesson-item {
+  margin-left: 24px;
+  margin-bottom: 8px;
+}
+
+.video-item {
+  margin-left: 48px;
+  margin-bottom: 4px;
+}
+
+.test-item {
+  margin-left: 48px;
+  margin-bottom: 4px;
+}
+
+.content-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ck-editor__editable {
+  min-height: 200px;
+}  */

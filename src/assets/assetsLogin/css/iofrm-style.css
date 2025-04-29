@@ -1,0 +1,199 @@
+/*------------------------------------------------------------------
+ * Theme Name: iO Form Theme
+ * Description: Login form theme
+ * Author: Ho Tro Hoc Tap
+ * Version: 1.0
+ *------------------------------------------------------------*/
+
+/*----- General form style -----*/
+.form-body {
+  background-color: #0093FF;
+  height: 100%;
+}
+
+.form-body.without-side .form-holder .form-content {
+  padding: 125px 60px 60px;
+}
+
+.form-body .form-holder {
+  margin-left: 50%;
+  position: relative;
+}
+
+.form-body.without-side .form-holder {
+  margin: 0;
+}
+
+.form-body .form-holder .form-content {
+  position: relative;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.form-body .form-holder .form-content ::-webkit-input-placeholder {
+  color: #8D8D8D;
+}
+
+.form-body .form-holder .form-content :-moz-placeholder {
+  color: #8D8D8D;
+}
+
+.form-body .form-holder .form-content ::-moz-placeholder {
+  color: #8D8D8D;
+}
+
+.form-body .form-holder .form-content :-ms-input-placeholder {
+  color: #8D8D8D;
+}
+
+.form-body .form-holder .form-content .form-items {
+  min-width: 340px;
+  max-width: 340px;
+  padding: 40px 30px;
+  text-align: left;
+  transition: all 0.4s ease;
+}
+
+.form-body .form-holder .form-content .form-items.form-items-1 {
+  padding: 60px 30px;
+}
+
+.form-body .form-holder .form-content .form-items .page-links {
+  margin-bottom: 15px;
+}
+
+.form-body .form-holder .form-content .form-items .page-links a {
+  transition: all 0.3s ease;
+}
+
+.form-body .form-holder .form-content .form-items .page-links.register-links a {
+  transition: all 0.3s ease;
+}
+
+.form-body .form-holder .form-content .form-items .page-links a.active {
+  font-weight: 700;
+}
+
+.form-body .form-holder .form-content .form-items .page-links:after {
+  content: "";
+  width: 100%;
+  height: 2px;
+  background-color: rgba(222, 222, 222, 0.35);
+  display: block;
+  margin-top: 10px;
+}
+
+.form-body .form-holder .form-content .form-items p {
+  color: #B9B9B9;
+  text-align: left;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.form-body .form-holder .form-content .form-items h3 {
+  color: #2A2A2A;
+  text-align: left;
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.form-body .form-holder .form-content .form-items h4 {
+  color: #2A2A2A;
+  text-align: left;
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.form-body .form-holder .form-content .form-items .form-control {
+  width: 100%;
+  padding: 12px 15px;
+  margin-bottom: 15px;
+  height: 48px;
+  font-size: 15px;
+  border: 1px solid #DADADA;
+  border-radius: 5px;
+  transition: all 0.3s ease;
+  background-color: #F7F7F7;
+}
+
+.form-body .form-holder .form-content .form-items .form-control:focus {
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.09);
+}
+
+.form-body .form-holder .form-content .form-items .form-button {
+  margin-top: 30px;
+}
+
+.form-body .form-holder .form-content .form-items .form-button .ibtn {
+  font-weight: 600;
+  height: 45px;
+  padding: 10px 20px;
+  border-radius: 5px;
+  background-color: #0093FF;
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 15px;
+  transition: all 0.3s ease;
+}
+
+.form-body .form-holder .form-content .form-items .form-button .ibtn:hover {
+  background-color: #0074c7;
+}
+
+.form-body .img-holder {
+  width: 50%;
+  background-color: #007bff;
+  height: 100vh;
+  background-size: cover;
+  background-position: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+.form-body.without-side .img-holder {
+  display: none;
+}
+
+.form-body .form-holder .form-content .form-items .btn-primary {
+  font-weight: 600;
+  height: 45px;
+  padding: 10px 20px;
+  border-radius: 5px;
+  background-color: #0093FF;
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 15px;
+  transition: all 0.3s ease;
+}
+
+.form-body .form-holder .form-content .form-items .btn-primary:hover {
+  background-color: #0074c7;
+}
+
+@media (max-width: 992px) {
+  .form-body .form-holder {
+    margin: 0;
+  }
+  
+  .form-body .form-holder .form-content {
+    padding-top: 50px;
+  }
+  
+  .form-body .img-holder {
+    display: none;
+  }
+  
+  .form-body.without-side .form-holder .form-content {
+    padding: 40px 30px;
+  }
+} 

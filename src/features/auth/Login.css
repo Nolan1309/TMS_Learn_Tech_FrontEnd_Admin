@@ -1,0 +1,73 @@
+/* Custom styles for login page */
+.password-wrapper {
+  position: relative;
+}
+
+.toggle-password {
+  cursor: pointer;
+  position: absolute;
+  right: 10px;
+  top: 40%;
+  transform: translateY(-50%);
+}
+
+.btn-forget {
+  margin-left: 15px;
+  color: #007bff;
+  text-decoration: none;
+}
+
+.btn-forget:hover {
+  text-decoration: underline;
+}
+
+.other-links {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.other-links .text {
+  margin-bottom: 10px;
+  color: #777;
+}
+
+.other-links a {
+  display: inline-block;
+  margin: 0 10px;
+  color: #555;
+  text-decoration: none;
+}
+
+.other-links a i {
+  margin-right: 5px;
+}
+
+.page-links {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.page-links a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.page-links a:hover {
+  text-decoration: underline;
+}
+
+/* Fix for Bootstrap 5 compatibility */
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0.375rem 0.75rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #212529;
+  background-color: #fff;
+  background-clip: padding-box;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+} 
