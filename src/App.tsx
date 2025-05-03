@@ -29,6 +29,8 @@ const Trash = React.lazy(() => import('./features/trash/Trash'));
 const Profile = React.lazy(() => import('./features/profile/Profile'));
 const Settings = React.lazy(() => import('./features/settings/Settings'));
 const Statistics = React.lazy(() => import('./features/statistics/Statistics'));
+const Evaluations = React.lazy(() => import('./features/evaluations/Evaluations'));
+const Rankings = React.lazy(() => import('./features/rankings/Rankings'));
 
 function App() {
   return (
@@ -57,6 +59,8 @@ function App() {
             <Route path="posts" element={<Posts />} />
             <Route path="discounts" element={<Discounts />} />
             <Route path="marketing" element={<Marketing />} />
+            <Route path="evaluations" element={<Evaluations />} />
+            <Route path="rankings" element={<Rankings />} />
             
             {/* Report */}
             <Route path="notifications" element={<Notifications />} />

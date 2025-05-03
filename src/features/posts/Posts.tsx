@@ -20,6 +20,10 @@ import { useNavigate } from 'react-router-dom';
 import useRefreshToken from '../../utils/useRefreshToken';
 import { SorterResult } from 'antd/es/table/interface';
 import { FilterValue } from 'antd/es/table/interface';
+import { CKEditor } from '@ckeditor/ckeditor5-react';
+import ClassicEditor from '@ckeditor/ckeditor5-build-classic';
+// Fix type issue with CKEditor
+const ClassicEditorWithTypes = ClassicEditor as any;
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -80,6 +84,8 @@ const Posts: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(0);
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null]>([null, null]);
   const [pageSize, setPageSize] = useState<number>(10);
+  const [contentTabKey, setContentTabKey] = useState<string>('editor');
+  const [previewContent, setPreviewContent] = useState<string>('');
 
   // Fetch authors from API
   const fetchAuthors = async () => {
@@ -136,13 +142,13 @@ const Posts: React.FC = () => {
 
       const data = await response.json();
 
-      // Transform API response to match our Category interface
-      const apiCategories = data.map((item: any) => ({
+      const categories = data
+      .filter((item: any) => item.type === 'BLOG') // lọc trước
+      .map((item: any) => ({
         id: item.id.toString(),
         name: item.name
       }));
-
-      setCategories(apiCategories);
+      setCategories(categories);
 
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -241,6 +247,7 @@ const Posts: React.FC = () => {
         setPosts([]); 
         // Slight delay to ensure state is updated
         setTimeout(() => {
+          
           setPosts(data.content);
           setTotalPosts(data.totalElements || data.content.length);
           setCurrentPage(data.number || 0);
@@ -250,6 +257,7 @@ const Posts: React.FC = () => {
         setPosts([]);
         // Slight delay to ensure state is updated
         setTimeout(() => {
+         
           setPosts(data);
           setTotalPosts(data.length);
           setCurrentPage(0);
@@ -281,7 +289,7 @@ const Posts: React.FC = () => {
       // Create FormData to handle file upload
       const formData = new FormData();
       formData.append('title', post.title);
-      formData.append('content', post.content);
+      formData.append('content', post.content); // CKEditor HTML content
       formData.append('summary', post.summary);
       formData.append('author_id', post.author_id);
       formData.append('updatedAt', post.updatedAt);
@@ -292,8 +300,6 @@ const Posts: React.FC = () => {
       formData.append('commentCount', String(post.commentCount));
       formData.append('isDeleted', String(post.isDeleted));
 
-      console.log("image: ", post.image);
-
       // Add createdAt only for new posts
       if (!isEditing) {
         formData.append('createdAt', post.createdAt);
@@ -301,28 +307,17 @@ const Posts: React.FC = () => {
 
       // Get the file from form upload and append to formData
       const uploadedFileList = form.getFieldValue('image');
-      console.log("uploadedFileList:", uploadedFileList);
 
       if (uploadedFileList) {
         // Get the file from the upload component
         const file = uploadedFileList[0].originFileObj;
-        console.log("Selected file:", file);
         if (file) {
           formData.append('image', file);
-          console.log("Appended file to formData");
         }
       }
 
-
       const token = await authTokenLogin(refreshToken, refresh, navigate);
 
-      // Log tất cả các trường trong FormData
-      // Sử dụng Array.from để tránh lỗi TypeScript với FormData Iterator
-      Array.from(formData.entries()).forEach(pair => {
-        console.log(pair[0] + ': ' + pair[1]);
-      });
-
-      // Gửi dữ liệu dạng FormData
       const response = await fetch(url, {
         method: isEditing ? 'PUT' : 'POST',
         headers: {
@@ -503,11 +498,14 @@ const Posts: React.FC = () => {
         status: post.status.toString(),
         featured: post.featured
       });
+      setPreviewContent(post.content);
     } else {
       setCurrentPost(null);
       form.resetFields();
+      setPreviewContent('');
     }
     setIsModalVisible(true);
+    setContentTabKey('editor'); // Default to editor tab when opening modal
   };
 
   // Xử lý đóng modal
@@ -515,7 +513,26 @@ const Posts: React.FC = () => {
     setIsModalVisible(false);
     setCurrentPost(null);
     form.resetFields();
+    setPreviewContent('');
+    setContentTabKey('editor');
   };
+
+  // Effect để khởi tạo form khi chỉnh sửa
+  useEffect(() => {
+    if (currentPost && isModalVisible) {
+      form.setFieldsValue({
+        title: currentPost.title,
+        content: currentPost.content,
+        summary: currentPost.summary,
+        cat_blog_id: currentPost.cat_blog_id,
+        author_id: currentPost.author_id,
+        status: currentPost.status.toString(),
+        featured: currentPost.featured,
+      });
+      
+      // CKEditor data is set via the 'data' prop, not here
+    }
+  }, [form, currentPost, isModalVisible]);
 
   // Xử lý lưu bài viết
   const handleSave = () => {
@@ -523,9 +540,9 @@ const Posts: React.FC = () => {
       const newPost: PostItem = {
         id: currentPost ? currentPost.id : `${posts.length + 1}`,
         title: values.title,
-        content: values.content,
+        content: values.content, // CKEditor content is already in form values
         summary: values.summary,
-        author_id: values.author_id, // Use selected author
+        author_id: values.author_id,
         createdAt: currentPost ? currentPost.createdAt : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         status: typeof values.status === 'string' ? values.status === 'true' : Boolean(values.status),
@@ -536,7 +553,7 @@ const Posts: React.FC = () => {
         commentCount: currentPost?.commentCount || 0,
         isDeleted: false
       };
-      console.log(newPost);
+      
       // Save post via API
       savePost(newPost);
 
@@ -743,21 +760,6 @@ const Posts: React.FC = () => {
     onChange: onSelectChange,
   };
 
-  // Effect để khởi tạo form khi chỉnh sửa
-  useEffect(() => {
-    if (currentPost && isModalVisible) {
-      form.setFieldsValue({
-        title: currentPost.title,
-        content: currentPost.content,
-        summary: currentPost.summary,
-        cat_blog_id: currentPost.cat_blog_id,
-        author_id: currentPost.author_id,
-        status: currentPost.status.toString(),
-        featured: currentPost.featured,
-      });
-    }
-  }, [form, currentPost, isModalVisible]);
-
   // Xử lý thay đổi pagination, page size và sorting
   const handleTableChange = (
     pagination: TablePaginationConfig,
@@ -898,7 +900,9 @@ const Posts: React.FC = () => {
             {currentPost ? "Cập nhật" : "Tạo mới"}
           </Button>,
         ]}
-        width={800}
+        width={1000}
+        centered
+        maskClosable={false}
       >
         <Form
           form={form}
@@ -933,7 +937,34 @@ const Posts: React.FC = () => {
                 label="Nội dung"
                 rules={[{ required: true, message: 'Vui lòng nhập nội dung bài viết' }]}
               >
-                <TextArea rows={6} />
+                <Tabs activeKey={contentTabKey} onChange={key => setContentTabKey(key)}>
+                  <TabPane tab="Soạn thảo" key="editor">
+                    <div className="ck-editor-container" style={{ border: '1px solid #d9d9d9', borderRadius: '2px', padding: '2px' }}>
+                      <CKEditor
+                        editor={ClassicEditorWithTypes}
+                        data={currentPost?.content || ''}
+                        onChange={(event, editor) => {
+                          const data = editor.getData();
+                          form.setFieldValue('content', data);
+                          setPreviewContent(data);
+                        }}
+                      />
+                    </div>
+                  </TabPane>
+                  <TabPane tab="Xem trước" key="preview">
+                    <div 
+                      className="content-preview" 
+                      style={{ 
+                        border: '1px solid #d9d9d9', 
+                        borderRadius: '2px', 
+                        padding: '16px', 
+                        minHeight: '200px',
+                        backgroundColor: '#fff' 
+                      }}
+                      dangerouslySetInnerHTML={{ __html: previewContent }}
+                    />
+                  </TabPane>
+                </Tabs>
               </Form.Item>
             </Col>
           </Row>

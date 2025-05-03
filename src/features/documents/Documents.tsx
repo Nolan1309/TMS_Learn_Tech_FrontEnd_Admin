@@ -260,13 +260,13 @@ const DocumentsPage: React.FC = () => {
           }
 
           const data = await response.json();
-
+          const dataDocument = data.data;
           form.setFieldsValue({
-            title: data.title,
-            categoryName: data.categoryName,
-            categoryId: data.categoryId,
-            status: data.status,
-            description: data.description || '',
+            title: dataDocument.title,
+            categoryName: dataDocument.categoryName,
+            categoryId: dataDocument.categoryId,
+            status: dataDocument.status,
+            description: dataDocument.description || '',
           });
         } catch (error) {
           console.error('Failed to fetch document details:', error);
@@ -690,6 +690,7 @@ const DocumentsPage: React.FC = () => {
       dataIndex: 'size',
       key: 'size',
     },
+  
     {
       title: 'Lượt xem',
       dataIndex: 'view',

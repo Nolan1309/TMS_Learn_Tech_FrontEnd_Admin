@@ -43,6 +43,8 @@ const AdminLayout: React.FC = () => {
     '/backup': 'Sao lưu phục hồi',
     '/trash': 'Thùng rác',
     '/profile': 'Thông tin cá nhân',
+    '/evaluations': 'Quản lý đánh giá',
+    '/rankings': 'Quản lý xếp hạng',
   };
 
   const extraBreadcrumbItems = pathSnippets.map((_, index) => {
@@ -120,6 +122,14 @@ const AdminLayout: React.FC = () => {
                 {
                   key: 'mock-exams',
                   label: <Link to="/mock-exams">Quản lý đề thi thử</Link>,
+                },
+                {
+                  key: 'evaluations',
+                  label: <Link to="/evaluations">Quản lý đánh giá</Link>,
+                },
+                {
+                  key: 'rankings',
+                  label: <Link to="/rankings">Quản lý xếp hạng</Link>,
                 },
                 {
                   key: 'categories',

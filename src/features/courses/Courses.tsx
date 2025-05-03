@@ -35,6 +35,7 @@ export interface Course {
   price: number;
   type: string;
   status: boolean;
+  level: string;
   categoryName?: string;
   students?: number;
 }
@@ -151,7 +152,7 @@ const ADMIN_GETALL_RESULT = `${process.env.REACT_APP_SERVER_HOST}/api/courses/al
 const ADMIN_GET_COURSE_OF_ACCOUNT = `${process.env.REACT_APP_SERVER_HOST}/api/courses/get-courseDTO-of-account`;
 
 const CoursesPage: React.FC = () => {
-  const navigate = useNavigate();
+  const navigate = useNavigate(); 
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchText, setSearchText] = useState<string>('');
@@ -291,6 +292,7 @@ const CoursesPage: React.FC = () => {
         deleted: item.deleted || false,
         cost: item.cost || 0,
         type: item.type || 'FEE',
+        level: item.level || 'BEGINNER',
         status: item.status,
         categoryName: item.categoryNameLevel3 || '',
         students: item.countStudent || 0
@@ -383,6 +385,7 @@ const CoursesPage: React.FC = () => {
         duration: course.duration,
         price: course.price,
         cost: course.cost,
+        level: course.level || 'BEGINNER',
         status: course.status
       });
       setCourseImage(null);
@@ -395,6 +398,7 @@ const CoursesPage: React.FC = () => {
         status: true,
         duration: 60,
         type: 'FEE',
+        level: 'BEGINNER',
         course_category_id: categories.length > 0 ? categories[0].id : ''
       });
       setCourseImage(null);
@@ -443,6 +447,7 @@ const CoursesPage: React.FC = () => {
       formData.append('courseCategoryId', values.course_category_id);
       formData.append('accountId', accountId.toString());
       formData.append('type', values.type);
+      formData.append('level', values.level);
       formData.append('status', values.status.toString());
 
       setSubmitting(true);
@@ -509,6 +514,7 @@ const CoursesPage: React.FC = () => {
       formData.append("courseCategoryId", values.course_category_id);
       formData.append("accountId", accountId.toString());
       formData.append("type", values.type);
+      formData.append("level", values.level);
       formData.append("status", values.status.toString());
 
       // Nếu có hình ảnh mới, thêm vào FormData
@@ -585,6 +591,11 @@ const CoursesPage: React.FC = () => {
         value: category,
       })),
       onFilter: (value, record) => record.type === value,
+    },
+    {
+      title: 'Cấp độ',
+      dataIndex: 'level',
+      key: 'level',
     },
     {
       title: 'Giảng viên',
@@ -866,6 +877,17 @@ const CoursesPage: React.FC = () => {
             </Select>
           </Form.Item>
 
+          <Form.Item
+            name="level"
+            label="Cấp độ"
+            rules={[{ required: true, message: 'Vui lòng chọn cấp độ khóa học!' }]}
+          >
+            <Select>
+              <Option value="BEGINNER">Cơ bản</Option>
+              <Option value="INTERMEDIATE">Trung cấp</Option>
+              <Option value="ADVANCED">Nâng cao</Option>
+            </Select>
+          </Form.Item>
 
           <Form.Item
             name="description"

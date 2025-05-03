@@ -1,0 +1,81 @@
+.rankings-container {
+  padding: 16px;
+}
+
+.ranking-card {
+  margin-top: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.ranking-filters {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.ranking-table .ant-table-row:nth-child(-n+3) .ranking-position {
+  font-weight: 600;
+}
+
+.ranking-table .ant-table-row:nth-child(1) .ranking-position {
+  color: #f5c518;
+}
+
+.ranking-table .ant-table-row:nth-child(2) .ranking-position {
+  color: #a0a0a0;
+}
+
+.ranking-table .ant-table-row:nth-child(3) .ranking-position {
+  color: #cd7f32;
+}
+
+.ranking-badge {
+  margin-left: 8px;
+}
+
+.ranking-detail-modal .ant-modal-content {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.ranking-stats {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.ranking-stat-card {
+  padding: 16px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  min-width: 200px;
+  text-align: center;
+}
+
+.ranking-stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  margin-top: 8px;
+  color: #1890ff;
+}
+
+.ranking-description {
+  margin-bottom: 24px;
+}
+
+.ranking-progress {
+  margin-bottom: 16px;
+}
+
+.ranking-criteria {
+  margin-top: 16px;
+  margin-bottom: 16px;
+  font-style: italic;
+  color: #888;
+}
+
+.ranking-action-btn {
+  margin-right: 8px;
+} 

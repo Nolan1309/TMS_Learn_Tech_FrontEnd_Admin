@@ -1,0 +1,39 @@
+.evaluations-container {
+  padding: 16px;
+}
+
+.evaluation-card {
+  margin-top: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.evaluation-filters {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.evaluation-action-btn {
+  margin-right: 8px;
+}
+
+.evaluation-detail-modal .ant-modal-content {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.evaluation-rating {
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.evaluation-comment {
+  margin-top: 12px;
+  white-space: pre-line;
+}
+
+.evaluation-tag {
+  margin-right: 8px;
+  margin-bottom: 8px;
+} 
