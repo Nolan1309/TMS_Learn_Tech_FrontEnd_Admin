@@ -213,7 +213,7 @@ const ExamsPage: React.FC = () => {
       const existingSelectedQuestions = questions
         .filter(q => existingQuestionIds.includes(q.id))
         .map(q => ({ id: q.id, level: q.level, type: q.type }));
-      
+
       // Update selected questions to include existing ones
       setSelectedQuestions(prev => {
         // Create a map of current selections to avoid duplicates
@@ -777,7 +777,7 @@ const ExamsPage: React.FC = () => {
           setLoading(false);
           return;
         }
-        
+
         // Instead of making separate DELETE calls, send all selected questions to the backend
         // The backend will handle adding new questions and removing deselected ones
         const response = await fetch(`${ADMIN_ADD_QUESTION_TO_TEST_V2}/${currentExam.id}`, {
@@ -911,7 +911,15 @@ const ExamsPage: React.FC = () => {
       key: 'createdAt',
       render: (text: string) => (
         <Space direction="vertical" size={0}>
-          <span style={{ fontSize: '12px', color: '#888' }}> {new Date(text).toLocaleDateString('vi-VN')}</span>
+          <span style={{ fontSize: '12px', color: '#888' }}>  {new Date(text).toLocaleString('vi-VN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          })}</span>
         </Space>
       ),
     },
@@ -1203,7 +1211,7 @@ const ExamsPage: React.FC = () => {
   const questionRowSelection = {
     type: 'checkbox' as const,
     selectedRowKeys: selectedQuestions.map(q => q.id), // phải map id ra
-  
+
     onSelect: (record: any, selected: boolean) => {
       if (selected) {
         setSelectedQuestions(prev => [...prev, { id: record.id, level: record.level, type: record.type }]);
@@ -1211,7 +1219,7 @@ const ExamsPage: React.FC = () => {
         setSelectedQuestions(prev => prev.filter(q => q.id !== record.id));
       }
     },
-  
+
     onSelectAll: (selected: boolean, selectedRows: any[], changeRows: any[]) => {
       if (selected) {
         const newSelected = changeRows.map(row => ({ id: row.id, level: row.level, type: row.type }));
@@ -1331,7 +1339,7 @@ const ExamsPage: React.FC = () => {
       const data = await response.json();
       console.log("Existing test questions:", data);
       setQuestionTest(data);
-      
+
       // Automatically add existing questions to selectedQuestions
       if (data && data.length > 0) {
         const existingQuestions = data.map((q: { id: number; level: string; type: string }) => ({
@@ -1339,7 +1347,7 @@ const ExamsPage: React.FC = () => {
           level: q.level,
           type: q.type
         }));
-        
+
         setSelectedQuestions(prev => {
           // Create a map to merge without duplicates
           const selectionMap = new Map(prev.map(q => [q.id, q]));
@@ -1822,7 +1830,15 @@ const ExamsPage: React.FC = () => {
                 </Descriptions.Item>
               )}
               <Descriptions.Item label="Ngày tạo">
-                {new Date(currentExam.createdAt).toLocaleDateString('vi-VN')}
+                {new Date(currentExam.createdAt).toLocaleString('vi-VN', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false
+                })}
               </Descriptions.Item>
               <Descriptions.Item label="Cập nhật lần cuối">
                 {currentExam.updatedAt ? new Date(currentExam.updatedAt).toLocaleDateString('vi-VN') : 'Chưa cập nhật'}
@@ -2239,7 +2255,7 @@ const ExamsPage: React.FC = () => {
                   />
                 </div>
               </TabPane>
-            
+
             </Tabs>
           </div>
         )}

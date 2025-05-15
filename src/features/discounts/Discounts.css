@@ -1,0 +1,54 @@
+/* Add styling for sticky column headers when scrolling horizontally */
+.ant-table-container {
+  overflow-x: auto;
+}
+
+.ant-table-fixed-column .ant-table-cell-fix-left,
+.ant-table-fixed-column .ant-table-cell-fix-right {
+  background-color: #fff;
+  z-index: 2;
+}
+
+/* Add shadow to fixed columns for better visual separation */
+.ant-table-cell-fix-left-last::after,
+.ant-table-cell-fix-right-first::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30px;
+  pointer-events: none;
+  content: '';
+}
+
+.ant-table-cell-fix-left-last::after {
+  right: -30px;
+  box-shadow: inset 10px 0 8px -8px rgba(0, 0, 0, 0.1);
+}
+
+.ant-table-cell-fix-right-first::after {
+  left: -30px;
+  box-shadow: inset -10px 0 8px -8px rgba(0, 0, 0, 0.1);
+}
+
+/* Discount-specific styles */
+.discount-tag {
+  margin-right: 8px;
+}
+
+.discount-code {
+  font-family: monospace;
+  font-weight: bold;
+}
+
+/* Action buttons styling */
+.action-buttons .ant-btn {
+  margin-right: 4px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ant-table {
+    width: 100%;
+    overflow-x: auto;
+  }
+} 

@@ -185,27 +185,27 @@ const InstructorRankings: React.FC = () => {
   const [filterLevel, setFilterLevel] = useState<string | null>(null);
   
   // Fetch rankings data
-  const fetchRankings = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/instructor/rankings`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch rankings');
-      }
-      const data = await response.json();
-      setRankings(data);
-    } catch (error) {
-      console.error('Error fetching rankings:', error);
-      // Using mock data for demonstration
-      setRankings(mockInstructors);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // const fetchRankings = async () => {
+  //   setLoading(true);
+  //   try {
+  //     const response = await fetch(`${API_URL}/instructor/rankings`);
+  //     if (!response.ok) {
+  //       throw new Error('Failed to fetch rankings');
+  //     }
+  //     const data = await response.json();
+  //     setRankings(data);
+  //   } catch (error) {
+  //     console.error('Error fetching rankings:', error);
+  //     // Using mock data for demonstration
+  //     setRankings(mockInstructors);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   
-  useEffect(() => {
-    fetchRankings();
-  }, []);
+  // useEffect(() => {
+  //   fetchRankings();
+  // }, []);
   
   // Filter function
   const getFilteredRankings = () => {

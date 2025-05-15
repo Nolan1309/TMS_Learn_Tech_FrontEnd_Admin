@@ -1,208 +1,610 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Typography, Card, Layout, Button, Space, Tag, Input, List, Select,
-  message, Modal, Form, Row, Col, Tabs, Badge, Tooltip, Avatar,
-  Divider, Drawer, Menu, Empty, Popconfirm
+  message as antMessage, Modal, Form, Row, Col, Tabs, Badge, Tooltip, Avatar,
+  Divider, Drawer, Menu, Empty, Popconfirm, Spin, Upload, Image, Progress, Alert
 } from 'antd';
 import {
   SendOutlined, DeleteOutlined, EditOutlined, UserOutlined,
   TeamOutlined, MessageOutlined, SearchOutlined, PaperClipOutlined,
   StarOutlined, StarFilled, FilterOutlined, MoreOutlined,
-  MailOutlined, InboxOutlined, FileTextOutlined
+  MailOutlined, InboxOutlined, FileTextOutlined, LoadingOutlined,
+  CheckOutlined, CheckCircleOutlined, PictureOutlined, UploadOutlined,
+  FileOutlined, FilePdfOutlined, FileWordOutlined, FileExcelOutlined,
+  FileZipOutlined, FileUnknownOutlined, DownloadOutlined, CopyOutlined
 } from '@ant-design/icons';
 import TextArea from 'antd/lib/input/TextArea';
+import SockJS from 'sockjs-client';
+import { Client } from '@stomp/stompjs';
+import axios from 'axios';
+import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
+import type { RcFile } from 'antd/es/upload';
+import { useUserStatus } from '../../utils/UserStatusProvider';
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
 const { TabPane } = Tabs;
 const { Sider, Content } = Layout;
 
-interface MessageItem {
-  id: string;
+// Định nghĩa các interface cho cấu trúc dữ liệu
+interface Message {
+  id: number;
   content: string;
-  sender: {
-    id: string;
-    name: string;
-    avatar?: string;
-  };
-  receiver: {
-    id: string;
-    name: string;
-    avatar?: string;
-  };
+  senderId?: number;  // Added to match the received format
+  fromId?: number;    // Keep for backward compatibility
+  receiveId?: number;
+  conversationId?: number; // Added to match the received format
+  senderUsername?: string;
+  messageType?: string;    // Added to match the received format
+  status?: string;         // Added to match the received format
   timestamp: string;
-  isRead: boolean;
-  isStarred: boolean;
-  attachments?: string[];
+  imageUrl?: string;       // URL to the image if it's an image message
+  fileUrl?: string;     // URL to the file
+  fileName?: string;    // Original file name
+  fileSize?: number;    // File size in bytes
+  fileType?: string;    // MIME type of the file
+}
+
+interface Conversation {
+  id: number;
+  name: string;
+
+  type: 'private' | 'group';
+  fromName?: string;
+  receivedName?: string;
+  fromId?: number;
+  receiverId?: number;
+  avatarFrom?: string;
+  avatarReceived?: string;
+  fromEmail?: string;
+  receivedEmail?: string;
+
+  messages: Message[];
+  lastMessage?: Message;
+  lastMessageTimestamp?: string;
+  unreadCount?: number;
+  roleReceiver?: string;
+  roleSender?: string;
 }
 
 interface Contact {
   id: string;
   name: string;
+  receivedName?: string;
   avatar?: string;
+  type: 'private' | 'group';
   status: 'online' | 'offline' | 'busy';
   lastActive?: string;
   unreadCount: number;
-  isTeacher: boolean;
+  roleReceiver?: string;
+  roleSender?: string;
+  fromEmail?: string;
+  receivedEmail?: string;
 }
 
 const MessagesPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
-  const [conversations, setConversations] = useState<MessageItem[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [searchText, setSearchText] = useState<string>('');
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('inbox');
+  const [activeTab, setActiveTab] = useState<string>('private');
   const [newMessage, setNewMessage] = useState<string>('');
   const [isComposeVisible, setIsComposeVisible] = useState<boolean>(false);
   const [composeForm] = Form.useForm();
-  
-  // Giả lập dữ liệu liên hệ
-  const mockContacts: Contact[] = [
-    {
-      id: '1',
-      name: 'Nguyễn Văn A',
-      avatar: 'https://zos.alipayobjects.com/rmsportal/ODTLcjxAfvqbxHnVXCYX.png',
-      status: 'online',
-      unreadCount: 2,
-      isTeacher: false
-    },
-    {
-      id: '2',
-      name: 'Trần Thị B',
-      status: 'offline',
-      lastActive: '2023-10-29T15:30:00',
-      unreadCount: 0,
-      isTeacher: false
-    },
-    {
-      id: '3',
-      name: 'Thầy Lê Văn C',
-      avatar: 'https://randomuser.me/api/portraits/men/43.jpg',
-      status: 'busy',
-      unreadCount: 5,
-      isTeacher: true
-    },
-    {
-      id: '4',
-      name: 'Cô Phạm Thị D',
-      avatar: 'https://randomuser.me/api/portraits/women/55.jpg',
-      status: 'online',
-      unreadCount: 0,
-      isTeacher: true
-    },
-    {
-      id: '5',
-      name: 'Hoàng Văn E',
-      status: 'offline',
-      lastActive: '2023-10-28T10:15:00',
-      unreadCount: 1,
-      isTeacher: false
-    }
-  ];
+  const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline'>('offline');
 
-  // Giả lập tin nhắn
-  const mockMessages: MessageItem[] = [
-    {
-      id: '1',
-      content: 'Xin chào, em cần hỏi về bài tập tuần này ạ.',
-      sender: {
-        id: '1',
-        name: 'Nguyễn Văn A',
-        avatar: 'https://zos.alipayobjects.com/rmsportal/ODTLcjxAfvqbxHnVXCYX.png'
-      },
-      receiver: {
-        id: '3',
-        name: 'Thầy Lê Văn C',
-        avatar: 'https://randomuser.me/api/portraits/men/43.jpg'
-      },
-      timestamp: '2023-10-30T09:45:00',
-      isRead: true,
-      isStarred: false
-    },
-    {
-      id: '2',
-      content: 'Em cần nộp bài vào ngày mai và cần được hướng dẫn thêm về phần 3 ạ.',
-      sender: {
-        id: '1',
-        name: 'Nguyễn Văn A',
-        avatar: 'https://zos.alipayobjects.com/rmsportal/ODTLcjxAfvqbxHnVXCYX.png'
-      },
-      receiver: {
-        id: '3',
-        name: 'Thầy Lê Văn C',
-        avatar: 'https://randomuser.me/api/portraits/men/43.jpg'
-      },
-      timestamp: '2023-10-30T09:48:00',
-      isRead: true,
-      isStarred: false
-    },
-    {
-      id: '3',
-      content: 'Chào em, phần 3 em cần chú ý đến cách giải phương trình. Thầy sẽ gửi ví dụ sau.',
-      sender: {
-        id: '3',
-        name: 'Thầy Lê Văn C',
-        avatar: 'https://randomuser.me/api/portraits/men/43.jpg'
-      },
-      receiver: {
-        id: '1',
-        name: 'Nguyễn Văn A',
-        avatar: 'https://zos.alipayobjects.com/rmsportal/ODTLcjxAfvqbxHnVXCYX.png'
-      },
-      timestamp: '2023-10-30T10:02:00',
-      isRead: true,
-      isStarred: true
-    },
-    {
-      id: '4',
-      content: 'Đây là ví dụ về cách giải phương trình. Em xem và áp dụng nhé.',
-      sender: {
-        id: '3',
-        name: 'Thầy Lê Văn C',
-        avatar: 'https://randomuser.me/api/portraits/men/43.jpg'
-      },
-      receiver: {
-        id: '1',
-        name: 'Nguyễn Văn A',
-        avatar: 'https://zos.alipayobjects.com/rmsportal/ODTLcjxAfvqbxHnVXCYX.png'
-      },
-      timestamp: '2023-10-30T10:05:00',
-      isRead: true,
-      isStarred: false,
-      attachments: ['example_solution.pdf']
-    },
-    {
-      id: '5',
-      content: 'Em cảm ơn thầy ạ. Em sẽ nghiên cứu và hỏi thêm nếu chưa hiểu.',
-      sender: {
-        id: '1',
-        name: 'Nguyễn Văn A',
-        avatar: 'https://zos.alipayobjects.com/rmsportal/ODTLcjxAfvqbxHnVXCYX.png'
-      },
-      receiver: {
-        id: '3',
-        name: 'Thầy Lê Văn C',
-        avatar: 'https://randomuser.me/api/portraits/men/43.jpg'
-      },
-      timestamp: '2023-10-30T10:15:00',
-      isRead: false,
-      isStarred: false
-    }
-  ];
+  const { userStatuses } = useUserStatus();
 
-  // Tải dữ liệu
-  useEffect(() => {
-    setTimeout(() => {
-      setContacts(mockContacts);
-      setConversations(mockMessages);
-      setLoading(false);
-      // Mặc định chọn liên hệ đầu tiên
-      if (mockContacts.length > 0) {
-        setSelectedContact(mockContacts[0]);
+  // API data states
+  const [apiConversations, setApiConversations] = useState<Conversation[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+
+  // STOMP client for WebSocket connection
+  const [stompClient, setStompClient] = useState<Client | null>(null);
+
+  // Add a counter to force re-render when messages update
+  const [messageUpdateCounter, setMessageUpdateCounter] = useState(0);
+
+  // State for image handling
+  const [selectedImage, setSelectedImage] = useState<UploadFile | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [uploadLoading, setUploadLoading] = useState<boolean>(false);
+  const [previewVisible, setPreviewVisible] = useState<boolean>(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // State for file handling
+  const [selectedFile, setSelectedFile] = useState<UploadFile | null>(null);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+
+  // Filter contacts by search text and tab type
+  const filteredContacts = useMemo(() => {
+    return contacts.filter(contact => {
+      const matchesSearch = !searchText ||
+        contact.name.toLowerCase().includes(searchText.toLowerCase());
+      const matchesTab = activeTab === contact.type;
+      return matchesSearch && matchesTab;
+    });
+  }, [contacts, searchText, activeTab]);
+
+  // Filter messages by search text for current conversation
+  const filteredMessages = useMemo(() => {
+    if (!selectedConversation || !selectedConversation.messages) return [];
+
+    // If no search, return all messages
+    if (!searchText) return selectedConversation.messages;
+
+    // Filter by search text
+    return selectedConversation.messages.filter(message =>
+      message.content.toLowerCase().includes(searchText.toLowerCase())
+    );
+  }, [selectedConversation, searchText, messageUpdateCounter]);
+
+  // Fetch user data from localStorage
+  const getCurrentUserId = () => {
+    const authData = localStorage.getItem("authData");
+    if (authData) {
+      try {
+        const userData = JSON.parse(authData);
+        return userData.id;
+      } catch (error) {
+        console.error("Error parsing authData:", error);
       }
-    }, 1000);
+    }
+    return null;
+  };
+
+  // Fetch conversations from API
+  const fetchConversations = async () => {
+    setLoading(true);
+    try {
+      const userId = getCurrentUserId();
+      if (!userId) {
+        console.error("User ID not found");
+        setLoading(false);
+        return;
+      }
+
+      setCurrentUserId(userId);
+
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        console.error("Auth token not found");
+        setLoading(false);
+        return;
+      }
+
+      const response = await axios.get(`http://localhost:8080/api/chat/conversations/${userId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      // Sort messages in each conversation with newest at the bottom
+      const conversationsWithSortedMessages = response.data.map((conv: Conversation) => {
+        if (conv.messages && Array.isArray(conv.messages)) {
+          // Sort by timestamp, with oldest messages first
+          const sortedMessages = [...conv.messages].sort((a, b) => {
+            return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+          });
+          return { ...conv, messages: sortedMessages };
+        }
+        return conv;
+      });
+
+      setApiConversations(conversationsWithSortedMessages);
+
+      // Select first conversation by default
+      if (conversationsWithSortedMessages.length > 0) {
+        setSelectedConversation(conversationsWithSortedMessages[0]);
+      }
+
+      // Create contacts from conversations with type
+      const extractedContacts: Contact[] = conversationsWithSortedMessages.map((conv: Conversation) => ({
+        id: conv.id.toString(),
+        name: conv.receivedName,
+        avatar: conv.avatarReceived,
+        type: conv.type, // Set type based on conversation type
+        status: 'offline',
+        unreadCount: 0,
+        roleReceiver: conv.roleReceiver,
+        roleSender: conv.roleSender,
+        lastActive: conv.lastMessageTimestamp,
+        lastMessage: conv.lastMessage,
+        lastMessageTimestamp: conv.lastMessageTimestamp,
+        fromEmail: conv.fromEmail,
+        receivedEmail: conv.receivedEmail,
+      }));
+
+      setContacts(extractedContacts);
+
+      // Select first contact of current tab type
+      const contactsOfCurrentTabType = extractedContacts.filter((c: Contact) => c.type === activeTab);
+      if (contactsOfCurrentTabType.length > 0) {
+        setSelectedContact(contactsOfCurrentTabType[0]);
+        // Find corresponding conversation
+        const conversation = conversationsWithSortedMessages.find((c: Conversation) => c.id.toString() === contactsOfCurrentTabType[0].id);
+        if (conversation) {
+          setSelectedConversation(conversation);
+        }
+      } else if (extractedContacts.length > 0) {
+        // If no contacts of current tab type, select the first one and switch tab
+        setSelectedContact(extractedContacts[0]);
+        setActiveTab(extractedContacts[0].type);
+        // Find corresponding conversation
+        const conversation = conversationsWithSortedMessages.find((c: Conversation) => c.id.toString() === extractedContacts[0].id);
+        if (conversation) {
+          setSelectedConversation(conversation);
+        }
+      }
+
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      antMessage.error("Không thể tải dữ liệu hội thoại");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Connect to WebSocket server and handle messages
+  useEffect(() => {
+    let client: Client | null = null;
+
+    const connectWebSocket = () => {
+      console.log("Connecting to WebSocket...");
+      const socket = new SockJS('http://localhost:8080/ws');
+      client = new Client({
+        webSocketFactory: () => socket,
+        reconnectDelay: 2000,
+        heartbeatIncoming: 4000,
+        heartbeatOutgoing: 4000,
+      });
+
+      client.onConnect = (frame) => {
+        console.log('Connected to WebSocket');
+        setConnectionStatus('online');
+
+        const userId = getCurrentUserId();
+        if (userId) {
+          client!.subscribe(`/user/${userId}/queue/messages`, (message) => {
+            try {
+              const receivedMsg = JSON.parse(message.body);
+              // console.log('Received message:', receivedMsg);
+
+              // Make sure the message has all required properties
+              if (receivedMsg.messageType === 'image' && receivedMsg.imageUrl) {
+                //  console.log('Received image message with URL:', receivedMsg.imageUrl);
+              } else if (receivedMsg.messageType === 'file' && receivedMsg.fileUrl) {
+                // console.log('Received file message with URL:', receivedMsg.fileUrl);
+              }
+
+              // Handle the new message format and update the conversations
+              if (receivedMsg && receivedMsg.conversationId) {
+                // First update the apiConversations state
+                setApiConversations(prevConversations => {
+                  // Create a new array with the updated conversation
+                  return prevConversations.map(conv => {
+                    if (conv.id === receivedMsg.conversationId) {
+                      // Check if message already exists to prevent duplicates
+                      const messageExists = conv.messages?.some(msg => msg.id === receivedMsg.id);
+                      if (messageExists) {
+                        return conv; // Don't add duplicate message
+                      }
+
+                      // Check if there's a temporary message with the same content that needs to be replaced
+                      const tempMessageIndex = conv.messages?.findIndex(msg => {
+                        if (msg.status !== 'sending') return false;
+
+                        // For image messages, match by messageType and imageUrl if available
+                        if (msg.messageType === 'image' && receivedMsg.messageType === 'image') {
+                          return msg.imageUrl === receivedMsg.imageUrl;
+                        }
+
+                        // For file messages, match by messageType and fileUrl if available
+                        if (msg.messageType === 'file' && receivedMsg.messageType === 'file') {
+                          return msg.fileUrl === receivedMsg.fileUrl;
+                        }
+
+                        // For regular text messages, match by content
+                        return msg.content === receivedMsg.content;
+                      });
+
+                      let updatedMessages;
+                      if (tempMessageIndex !== -1 && tempMessageIndex !== undefined) {
+                        // Replace the temporary message with the real one
+                        updatedMessages = [...(conv.messages || [])];
+
+                        // Preserve the imageUrl or fileUrl from the temporary message if not in the received message
+                        if (updatedMessages[tempMessageIndex].messageType === 'image' &&
+                          updatedMessages[tempMessageIndex].imageUrl &&
+                          !receivedMsg.imageUrl) {
+                          receivedMsg.imageUrl = updatedMessages[tempMessageIndex].imageUrl;
+                        } else if (updatedMessages[tempMessageIndex].messageType === 'file' &&
+                          updatedMessages[tempMessageIndex].fileUrl &&
+                          !receivedMsg.fileUrl) {
+                          receivedMsg.fileUrl = updatedMessages[tempMessageIndex].fileUrl;
+                          receivedMsg.fileName = updatedMessages[tempMessageIndex].fileName;
+                          receivedMsg.fileSize = updatedMessages[tempMessageIndex].fileSize;
+                          receivedMsg.fileType = updatedMessages[tempMessageIndex].fileType;
+                        }
+
+                        updatedMessages[tempMessageIndex] = receivedMsg;
+                      } else {
+                        // Just add the new message
+                        updatedMessages = [...(conv.messages || []), receivedMsg];
+                      }
+
+                      // Add the new message to this conversation
+                      return {
+                        ...conv,
+                        messages: updatedMessages
+                      };
+                    }
+                    return conv;
+                  });
+                });
+
+                // Then update selectedConversation if it matches the conversation ID
+                if (selectedConversation && selectedConversation.id === receivedMsg.conversationId) {
+                  setSelectedConversation(prevSelected => {
+                    if (!prevSelected) return null;
+
+                    // Check if message already exists to prevent duplicates
+                    const messageExists = prevSelected.messages?.some(msg => msg.id === receivedMsg.id);
+                    if (messageExists) {
+                      return prevSelected; // Don't add duplicate message
+                    }
+
+                    // Check if there's a temporary message with the same content that needs to be replaced
+                    const tempMessageIndex = prevSelected.messages?.findIndex(msg => {
+                      if (msg.status !== 'sending') return false;
+
+                      // For image messages, match by messageType and imageUrl if available
+                      if (msg.messageType === 'image' && receivedMsg.messageType === 'image') {
+                        return msg.imageUrl === receivedMsg.imageUrl;
+                      }
+
+                      // For file messages, match by messageType and fileUrl if available
+                      if (msg.messageType === 'file' && receivedMsg.messageType === 'file') {
+                        return msg.fileUrl === receivedMsg.fileUrl;
+                      }
+
+                      // For regular text messages, match by content
+                      return msg.content === receivedMsg.content;
+                    });
+
+                    let updatedMessages;
+                    if (tempMessageIndex !== -1 && tempMessageIndex !== undefined) {
+                      // Replace the temporary message with the real one
+                      updatedMessages = [...(prevSelected.messages || [])];
+
+                      // Preserve the imageUrl or fileUrl from the temporary message if not in the received message
+                      if (updatedMessages[tempMessageIndex].messageType === 'image' &&
+                        updatedMessages[tempMessageIndex].imageUrl &&
+                        !receivedMsg.imageUrl) {
+                        receivedMsg.imageUrl = updatedMessages[tempMessageIndex].imageUrl;
+                      } else if (updatedMessages[tempMessageIndex].messageType === 'file' &&
+                        updatedMessages[tempMessageIndex].fileUrl &&
+                        !receivedMsg.fileUrl) {
+                        receivedMsg.fileUrl = updatedMessages[tempMessageIndex].fileUrl;
+                        receivedMsg.fileName = updatedMessages[tempMessageIndex].fileName;
+                        receivedMsg.fileSize = updatedMessages[tempMessageIndex].fileSize;
+                        receivedMsg.fileType = updatedMessages[tempMessageIndex].fileType;
+                      }
+
+                      updatedMessages[tempMessageIndex] = receivedMsg;
+                    } else {
+                      // Just add the new message
+                      updatedMessages = [...(prevSelected.messages || []), receivedMsg];
+                    }
+
+                    // Add the new message to the selected conversation
+                    return {
+                      ...prevSelected,
+                      messages: updatedMessages
+                    };
+                  });
+
+                  // Force a re-render by incrementing the counter
+                  setMessageUpdateCounter(prev => prev + 1);
+
+                  // Scroll to bottom after new message is added
+                  setTimeout(() => {
+                    const messageContainer = document.querySelector('.message-container');
+                    if (messageContainer) {
+                      messageContainer.scrollTop = messageContainer.scrollHeight;
+                    }
+                  }, 100);
+                }
+              }
+            } catch (error) {
+              console.error('Error processing received message:', error);
+            }
+          });
+
+          // Also subscribe to online status updates for other users
+          client!.subscribe('/topic/online-users', (message) => {
+            console.log("Received online status update:", message.body);
+            // You can implement handling of other users' online status if needed
+          });
+          client!.subscribe('/topic/status', function (message) {
+            const status = JSON.parse(message.body);
+            console.log("status: ", status);
+            if (status.online) {
+              console.log(status.username + " vừa online");
+              setContacts(prevContacts => prevContacts.map(contact => {
+                if (contact.receivedEmail === status.username) {
+                  return {
+                    ...contact,
+                    status: 'online'
+                  };
+                }
+                return contact;
+              }));
+            } else {
+              console.log(status.username + " vừa offline");
+              setContacts(prevContacts => prevContacts.map(contact => {
+                if (contact.receivedEmail === status.username) {
+                  return {
+                    ...contact,
+                    status: 'offline'
+                  };
+                }
+                return contact;
+              }));
+            }
+          });
+        }
+      };      
+
+      client.onStompError = (frame) => {
+        console.error('STOMP error:', frame);
+      };
+
+      client.onWebSocketError = (error) => {
+        console.error('WebSocket error:', error);
+        setConnectionStatus('offline');
+        // Will automatically try to reconnect
+      };
+
+      client.onWebSocketClose = () => {
+        console.log('WebSocket connection closed');
+        setConnectionStatus('offline');
+        // Will automatically try to reconnect
+      };
+
+      client.activate();
+      setStompClient(client);
+    };
+
+    // Initial connection
+    connectWebSocket();
+
+    // Cleanup function
+    return () => {
+      if (client && client.connected) {
+        console.log("Disconnecting WebSocket");
+        client.deactivate();
+      }
+    };
   }, []);
+
+  // Fetch initial conversations
+  useEffect(() => {
+    fetchConversations();
+  }, []);
+
+  // Add an effect to update selectedConversation when apiConversations changes
+  useEffect(() => {
+    if (selectedConversation && apiConversations.length > 0) {
+      // Find the updated version of the selected conversation
+      const updatedConversation = apiConversations.find(conv => conv.id === selectedConversation.id);
+      if (updatedConversation && JSON.stringify(updatedConversation) !== JSON.stringify(selectedConversation)) {
+        // console.log("Updating selected conversation from apiConversations change");
+        setSelectedConversation(updatedConversation);
+      }
+    }
+  }, [apiConversations]);
+
+  const sendMessage = () => {
+    if (!stompClient || !stompClient.connected || !newMessage.trim() || !selectedConversation) {
+      return;
+    }
+
+    const userId = getCurrentUserId();
+    if (!userId) {
+      antMessage.error("Không thể xác định người dùng");
+      return;
+    }
+
+    // Prepare message data
+    const messageData = {
+      content: newMessage,
+      from: userId,
+      conversationId: selectedConversation.id,
+      // For private chat, specify receiveId
+      to: selectedConversation.type === 'private'
+        ? (selectedConversation.messages && selectedConversation.messages.length > 0
+          ? (selectedConversation.messages[0].fromId === userId
+            ? selectedConversation.messages[0].receiveId
+            : selectedConversation.messages[0].fromId)
+          : null)
+        : null,
+      type: selectedConversation.type
+    };
+
+    try {
+      // Create a temporary message to display immediately
+      const tempMessage: Message = {
+        id: Date.now(), // Temporary ID
+        content: newMessage,
+        fromId: userId,
+        conversationId: selectedConversation.id,
+        timestamp: new Date().toISOString(),
+        status: 'sending'
+      };
+
+      // Add the temporary message to the selected conversation
+      setSelectedConversation(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          messages: [...(prev.messages || []), tempMessage]
+        };
+      });
+
+      // ALSO update the message in apiConversations
+      setApiConversations(prevConversations => {
+        return prevConversations.map(conv => {
+          if (conv.id === selectedConversation.id) {
+            // Add the new message to this conversation
+            return {
+              ...conv,
+              messages: [...(conv.messages || []), tempMessage]
+            };
+          }
+          return conv;
+        });
+      });
+
+      // Force a re-render
+      setMessageUpdateCounter(prev => prev + 1);
+
+      // Scroll to bottom
+      setTimeout(() => {
+        const messageContainer = document.querySelector('.message-container');
+        if (messageContainer) {
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+      }, 100);
+
+      // Send message using StompClient
+      if (selectedConversation.type === 'private') {
+        // Send private message
+        stompClient.publish({
+          destination: '/app/chat.private',
+          body: JSON.stringify(messageData)
+        });
+        console.log("Send private message:", messageData);
+      } else {
+        // Send group message
+        stompClient.publish({
+          destination: '/app/chat.group',
+          body: JSON.stringify(messageData)
+        });
+        console.log("Send group message:", messageData);
+      }
+
+      // Clear message input field
+      setNewMessage('');
+
+    } catch (error) {
+      console.error("Error sending message:", error);
+      antMessage.error("Không thể gửi tin nhắn");
+    }
+  };
 
   // Xử lý tìm kiếm
   const handleSearch = (value: string) => {
@@ -211,62 +613,30 @@ const MessagesPage: React.FC = () => {
 
   // Xử lý gửi tin nhắn
   const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedContact) return;
-
-    const newMessageItem: MessageItem = {
-      id: `${conversations.length + 1}`,
-      content: newMessage,
-      sender: {
-        id: 'current_user',
-        name: 'Bạn',
-      },
-      receiver: {
-        id: selectedContact.id,
-        name: selectedContact.name,
-        avatar: selectedContact.avatar
-      },
-      timestamp: new Date().toISOString(),
-      isRead: false,
-      isStarred: false
-    };
-
-    setConversations([...conversations, newMessageItem]);
-    setNewMessage('');
-    message.success('Đã gửi tin nhắn');
+    sendMessage();
   };
 
-  // Xử lý đánh dấu tin nhắn
-  const handleToggleStarred = (id: string) => {
-    setConversations(conversations.map(msg => {
-      if (msg.id === id) {
-        return { ...msg, isStarred: !msg.isStarred };
-      }
-      return msg;
-    }));
-  };
-
-  // Xử lý xóa tin nhắn
-  const handleDeleteMessage = (id: string) => {
-    setConversations(conversations.filter(msg => msg.id !== id));
-    message.success('Đã xóa tin nhắn');
-  };
-
-  // Xử lý chọn liên hệ
+  // Xử lý chọn liên hệ/hội thoại
   const handleSelectContact = (contact: Contact) => {
     setSelectedContact(contact);
-    
-    // Đánh dấu tất cả tin nhắn từ liên hệ này là đã đọc
-    setConversations(conversations.map(msg => {
-      if ((msg.sender.id === contact.id || msg.receiver.id === contact.id) && !msg.isRead) {
-        return { ...msg, isRead: true };
-      }
-      return msg;
-    }));
-    
-    // Cập nhật số tin nhắn chưa đọc
+
+    // Find corresponding conversation
+    const conversation = apiConversations.find(c => c.id.toString() === contact.id);
+    if (conversation) {
+      setSelectedConversation(conversation);
+    }
+
+    // Update read status in UI
     setContacts(contacts.map(c => {
       if (c.id === contact.id) {
-        return { ...c, unreadCount: 0 };
+        return {
+          ...c, unreadCount: 0, roleReceiver: contact.roleReceiver,
+          roleSender: contact.roleSender, lastActive: contact.lastActive,
+          avatarReceived: contact.avatar,
+          name: contact.name,
+          type: contact.type,
+          status: contact.status,
+        };
       }
       return c;
     }));
@@ -280,107 +650,678 @@ const MessagesPage: React.FC = () => {
   // Xử lý gửi tin nhắn mới từ form
   const handleSubmitCompose = () => {
     composeForm.validateFields().then(values => {
-      const { recipient, subject, messageContent } = values;
-      
+      const { recipient, messageContent } = values;
+
       // Tìm contact dựa trên ID
       const contact = contacts.find(c => c.id === recipient);
-      
-      if (contact) {
-        const newMessageItem: MessageItem = {
-          id: `${conversations.length + 1}`,
+
+      if (contact && currentUserId && stompClient && stompClient.connected) {
+        // Create message data
+        const messageData = {
           content: messageContent,
-          sender: {
-            id: 'current_user',
-            name: 'Bạn',
-          },
-          receiver: {
-            id: contact.id,
-            name: contact.name,
-            avatar: contact.avatar
-          },
-          timestamp: new Date().toISOString(),
-          isRead: false,
-          isStarred: false
+          fromId: currentUserId,
+          receiveId: parseInt(recipient),
+          type: 'private'
         };
 
-        setConversations([...conversations, newMessageItem]);
-        message.success('Đã gửi tin nhắn mới');
-        setIsComposeVisible(false);
-        composeForm.resetFields();
+        try {
+          // Create a temporary message to display immediately
+          const tempMessage: Message = {
+            id: Date.now(), // Temporary ID
+            content: messageContent,
+            fromId: currentUserId,
+            receiveId: parseInt(recipient),
+            timestamp: new Date().toISOString(),
+            status: 'sending'
+          };
+
+          // Find the conversation for this recipient
+          const targetConversation = apiConversations.find(c => c.id.toString() === recipient);
+
+          if (targetConversation) {
+            // Update apiConversations
+            setApiConversations(prevConversations => {
+              return prevConversations.map(conv => {
+                if (conv.id.toString() === recipient) {
+                  // Add the new message to this conversation
+                  return {
+                    ...conv,
+                    messages: [...(conv.messages || []), tempMessage]
+                  };
+                }
+                return conv;
+              });
+            });
+
+            // If this is the currently selected conversation, update it too
+            if (selectedConversation && selectedConversation.id.toString() === recipient) {
+              setSelectedConversation(prev => {
+                if (!prev) return null;
+                return {
+                  ...prev,
+                  messages: [...(prev.messages || []), tempMessage]
+                };
+              });
+
+              // Force a re-render
+              setMessageUpdateCounter(prev => prev + 1);
+
+              // Scroll to bottom
+              setTimeout(() => {
+                const messageContainer = document.querySelector('.message-container');
+                if (messageContainer) {
+                  messageContainer.scrollTop = messageContainer.scrollHeight;
+                }
+              }, 100);
+            } else {
+              // Switch to this conversation if it's not currently selected
+              setSelectedContact(contact);
+              setSelectedConversation(targetConversation);
+            }
+          }
+
+          // Send private message using StompClient
+          stompClient.publish({
+            destination: '/app/chat.private',
+            body: JSON.stringify(messageData)
+          });
+
+          antMessage.success('Đã gửi tin nhắn mới');
+          setIsComposeVisible(false);
+          composeForm.resetFields();
+        } catch (error) {
+          console.error("Error sending new message:", error);
+          antMessage.error("Không thể gửi tin nhắn");
+        }
       }
     });
   };
 
-  // Lọc tin nhắn cho liên hệ đang chọn
-  const filteredMessages = selectedContact 
-    ? conversations.filter(msg => 
-        msg.sender.id === selectedContact.id || 
-        msg.receiver.id === selectedContact.id
-      ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-    : [];
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('vi-VN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
-  // Lọc liên hệ theo từ khóa tìm kiếm
-  const filteredContacts = contacts.filter(contact => {
-    if (searchText) {
-      return contact.name.toLowerCase().includes(searchText.toLowerCase());
+  // Update the isFromCurrentUser function to work with both field names
+  const isFromCurrentUser = (fromId: number | undefined, senderId: number | undefined) => {
+    // Use senderId if available, otherwise use fromId
+    const effectiveSenderId = senderId || fromId;
+    return currentUserId === effectiveSenderId;
+  };
+
+  // Add useEffect to scroll to bottom when conversations are loaded or selectedConversation changes
+  useEffect(() => {
+    // Scroll to bottom of message container
+    setTimeout(() => {
+      const messageContainer = document.querySelector('.message-container');
+      if (messageContainer) {
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+      }
+    }, 100);
+  }, [selectedConversation, filteredMessages.length]);
+
+  // Handle image upload
+  const handleImageSelect = async (file: RcFile): Promise<boolean> => {
+    // Validate file type
+    const isImage = file.type.startsWith('image/');
+    if (!isImage) {
+      antMessage.error('Chỉ có thể tải lên các tập tin hình ảnh!');
+      return false;
     }
-    return true;
-  });
+
+    // Validate file size (5MB max)
+    const isLt5M = file.size / 1024 / 1024 < 5;
+    if (!isLt5M) {
+      antMessage.error('Hình ảnh phải nhỏ hơn 5MB!');
+      return false;
+    }
+
+    // Convert to base64 for preview
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const uploadFile: UploadFile = {
+        uid: file.uid,
+        name: file.name,
+        status: 'done',
+        url: reader.result as string,
+        originFileObj: file,
+      };
+      setSelectedImage(uploadFile);
+    };
+
+    return false; // Prevent default upload behavior
+  };
+
+  // Upload image to server
+  const uploadImage = async (file: RcFile): Promise<string> => {
+    setUploadLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error('Auth token not found');
+      }
+
+      // Upload to the API with POST /api/chat/image
+      const response = await axios.post('http://localhost:8080/api/chat/image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+
+      // if (response.data && response.data.data) {
+      //   console.log('Found data field:', response.data.data);
+      //   console.log('Data field type:', typeof response.data.data);
+      // }
+
+      // Check if the response contains the image URL
+      if (response.data && response.data.data) {
+        // ApiResponse format with data field
+        const imageUrl = response.data.data;
+        setUploadedImageUrl(imageUrl);
+        return imageUrl;
+      } else if (response.data && typeof response.data === 'string') {
+        // Direct URL response
+        setUploadedImageUrl(response.data);
+        return response.data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      antMessage.error('Không thể tải lên hình ảnh');
+      throw error;
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  // Send message with image
+  const sendImageMessage = async () => {
+    if (!stompClient || !stompClient.connected || !selectedImage?.originFileObj || !selectedConversation) {
+      return;
+    }
+
+    try {
+      setUploadLoading(true);
+
+      // Upload the image first
+      const imageUrl = await uploadImage(selectedImage.originFileObj);
+
+      const userId = getCurrentUserId();
+      if (!userId) {
+        antMessage.error("Không thể xác định người dùng");
+        return;
+      }
+
+      // Prepare message data
+      const messageData = {
+        content: imageUrl,  // Use the image URL as content
+        from: userId,
+        conversationId: selectedConversation.id,
+        to: selectedConversation.type === 'private'
+          ? (selectedConversation.messages && selectedConversation.messages.length > 0
+            ? (selectedConversation.messages[0].fromId === userId
+              ? selectedConversation.messages[0].receiveId
+              : selectedConversation.messages[0].fromId)
+            : null)
+          : null,
+        type: selectedConversation.type,
+        messageType: 'image',
+        imageUrl: imageUrl  // Also include imageUrl property
+      };
+
+      // Create a temporary message to display immediately
+      const tempMessage: Message = {
+        id: Date.now(), // Temporary ID
+        content: imageUrl,  // Use the image URL as content
+        fromId: userId,
+        conversationId: selectedConversation.id,
+        timestamp: new Date().toISOString(),
+        status: 'sending',
+        messageType: 'image',
+        imageUrl: imageUrl,  // Also include imageUrl property
+
+      };
+
+      // Add the temporary message to the selected conversation
+      setSelectedConversation(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          messages: [...(prev.messages || []), tempMessage]
+        };
+      });
+
+      // ALSO update the message in apiConversations
+      setApiConversations(prevConversations => {
+        return prevConversations.map(conv => {
+          if (conv.id === selectedConversation.id) {
+            // Add the new message to this conversation
+            return {
+              ...conv,
+              messages: [...(conv.messages || []), tempMessage]
+            };
+          }
+          return conv;
+        });
+      });
+
+      // Force a re-render
+      setMessageUpdateCounter(prev => prev + 1);
+
+      // Scroll to bottom
+      setTimeout(() => {
+        const messageContainer = document.querySelector('.message-container');
+        if (messageContainer) {
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+      }, 100);
+
+      // Send message using StompClient
+      if (selectedConversation.type === 'private') {
+        stompClient.publish({
+          destination: '/app/chat.private',
+          body: JSON.stringify(messageData)
+        });
+        // console.log("Send private image message:", messageData);
+      } else {
+        stompClient.publish({
+          destination: '/app/chat.group',
+          body: JSON.stringify(messageData)
+        });
+        // console.log("Send group image message:", messageData);
+      }
+
+      // Reset image selection
+      setSelectedImage(null);
+      setUploadedImageUrl(null);
+
+    } catch (error) {
+      console.error("Error sending image message:", error);
+      antMessage.error("Không thể gửi tin nhắn hình ảnh");
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  // Remove selected image
+  const removeSelectedImage = () => {
+    setSelectedImage(null);
+    setUploadedImageUrl(null);
+  };
+
+  // Helper to get file icon based on file type
+  const getFileIcon = (fileName: string, fileType?: string): React.ReactNode => {
+    if (!fileName) return <FileUnknownOutlined />;
+
+    const extension = fileName.split('.').pop()?.toLowerCase();
+
+    if (extension === 'pdf' || fileType?.includes('pdf')) {
+      return <FilePdfOutlined style={{ color: '#ff4d4f' }} />;
+    } else if (['doc', 'docx'].includes(extension || '') || fileType?.includes('word')) {
+      return <FileWordOutlined style={{ color: '#1890ff' }} />;
+    } else if (['xls', 'xlsx', 'csv'].includes(extension || '') || fileType?.includes('excel') || fileType?.includes('spreadsheet')) {
+      return <FileExcelOutlined style={{ color: '#52c41a' }} />;
+    } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension || '') || fileType?.includes('zip') || fileType?.includes('compressed')) {
+      return <FileZipOutlined style={{ color: '#faad14' }} />;
+    } else {
+      return <FileOutlined />;
+    }
+  };
+
+  // Format file size for display
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Helper to check if a string is an image URL
+  const isImageUrl = (url: string): boolean => {
+    if (!url) return false;
+
+    // Check if URL ends with common image extensions
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+    const lowercaseUrl = url.toLowerCase();
+
+    // Check for image hosting services
+    const imageHostingPatterns = [
+      'imagekit.io',
+      'imgur.com',
+      'cloudinary.com',
+      'res.cloudinary.com',
+      'i.imgur.com'
+    ];
+
+    // Check if URL ends with an image extension
+    const hasImageExtension = imageExtensions.some(ext => lowercaseUrl.endsWith(ext));
+
+    // Check if URL contains an image hosting service domain
+    const hasImageHostingDomain = imageHostingPatterns.some(pattern => lowercaseUrl.includes(pattern));
+
+    return hasImageExtension || hasImageHostingDomain;
+  };
+
+  // Helper to check if a string is a file URL
+  const isFileUrl = (url: string): boolean => {
+    if (!url) return false;
+
+    // Check if URL ends with common file extensions
+    const fileExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.zip', '.rar', '.txt'];
+    const lowercaseUrl = url.toLowerCase();
+
+    // Check for file hosting services
+    const fileHostingPatterns = [
+      'drive.google.com',
+      'docs.google.com',
+      'dropbox.com',
+      'onedrive.live.com',
+      'mediafire.com'
+    ];
+
+    // Check if URL ends with a file extension
+    const hasFileExtension = fileExtensions.some(ext => lowercaseUrl.endsWith(ext));
+
+    // Check if URL contains a file hosting service domain
+    const hasFileHostingDomain = fileHostingPatterns.some(pattern => lowercaseUrl.includes(pattern));
+
+    return hasFileExtension || hasFileHostingDomain;
+  };
+
+  const getFileNameFromUrl = (encodedUrl: string): string => {
+    if (!encodedUrl) return 'Tập tin';
+
+    let decodedUrl = '';
+    try {
+      decodedUrl = decodeURIComponent(encodedUrl); // Bước 1: Giải mã
+    } catch (e) {
+      decodedUrl = encodedUrl; // Nếu lỗi thì giữ nguyên
+    }
+
+    // Bước 2: Tách phần cuối cùng (sau dấu '/')
+    const parts = decodedUrl.split('/');
+    let fileName = parts[parts.length - 1];
+
+    // Bước 3: Xoá tiền tố imagesChat123456789_
+    const pattern = /^imagesChat\d+_(.+)$/;
+    const match = fileName.match(pattern);
+    if (match && match[1]) {
+      fileName = match[1];
+    }
+
+    return fileName || 'Tập tin';
+  };
+
+
+  // Handle file select
+  const handleFileSelect = async (file: RcFile): Promise<boolean> => {
+    // Validate file size (20MB max)
+    const isLt20M = file.size / 1024 / 1024 < 20;
+    if (!isLt20M) {
+      antMessage.error('Tập tin phải nhỏ hơn 20MB!');
+      return false;
+    }
+
+    // Create an UploadFile object
+    const uploadFile: UploadFile = {
+      uid: file.uid,
+      name: file.name,
+      status: 'done',
+      size: file.size,
+      type: file.type,
+      originFileObj: file,
+    };
+
+    setSelectedFile(uploadFile);
+    return false; // Prevent default upload behavior
+  };
+
+  // Upload file to server
+  const uploadFile = async (file: RcFile): Promise<string> => {
+    setUploadLoading(true);
+    setUploadProgress(0);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error('Auth token not found');
+      }
+
+      // Upload to the API with progress tracking
+      const response = await axios.post('http://localhost:8080/api/chat/file', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percentCompleted);
+          }
+        }
+      });
+
+      //  console.log('File upload response:', response.data);
+
+      // Check if the response contains the file URL
+      if (response.data && response.data.data) {
+        // ApiResponse format with data field
+        const fileUrl = response.data.data;
+        setUploadedFileUrl(fileUrl);
+        return fileUrl;
+      } else if (response.data && typeof response.data === 'string') {
+        // Direct URL response
+        setUploadedFileUrl(response.data);
+        return response.data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      antMessage.error('Không thể tải lên tập tin');
+      throw error;
+    } finally {
+      setUploadLoading(false);
+      setUploadProgress(100);
+    }
+  };
+
+  // Remove selected file
+  const removeSelectedFile = () => {
+    setSelectedFile(null);
+    setUploadedFileUrl(null);
+    setUploadProgress(0);
+  };
+
+  // Send message with file
+  const sendFileMessage = async () => {
+    if (!stompClient || !stompClient.connected || !selectedFile?.originFileObj || !selectedConversation) {
+      return;
+    }
+
+    try {
+      setUploadLoading(true);
+
+      // Upload the file first
+      const fileUrl = await uploadFile(selectedFile.originFileObj);
+
+      const userId = getCurrentUserId();
+      if (!userId) {
+        antMessage.error("Không thể xác định người dùng");
+        return;
+      }
+
+      // Prepare message data
+      const messageData = {
+        content: fileUrl,  // Use file name as content
+        from: userId,
+        conversationId: selectedConversation.id,
+        to: selectedConversation.type === 'private'
+          ? (selectedConversation.messages && selectedConversation.messages.length > 0
+            ? (selectedConversation.messages[0].fromId === userId
+              ? selectedConversation.messages[0].receiveId
+              : selectedConversation.messages[0].fromId)
+            : null)
+          : null,
+        type: selectedConversation.type,
+        messageType: 'file',
+        fileUrl: fileUrl,
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        fileType: selectedFile.type
+      };
+
+      // console.log("Sending file message with URL:", fileUrl);
+
+      // Create a temporary message to display immediately
+      const tempMessage: Message = {
+        id: Date.now(),
+        content: selectedFile.name || "Tập tin",  // Use file name as content
+        fromId: userId,
+        conversationId: selectedConversation.id,
+        timestamp: new Date().toISOString(),
+        status: 'sending',
+        messageType: 'file',
+        fileUrl: fileUrl,
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        fileType: selectedFile.type
+      };
+
+      // Add the temporary message to the selected conversation
+      setSelectedConversation(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          messages: [...(prev.messages || []), tempMessage]
+        };
+      });
+
+      // ALSO update the message in apiConversations
+      setApiConversations(prevConversations => {
+        return prevConversations.map(conv => {
+          if (conv.id === selectedConversation.id) {
+            return {
+              ...conv,
+              messages: [...(conv.messages || []), tempMessage]
+            };
+          }
+          return conv;
+        });
+      });
+
+      // Force a re-render
+      setMessageUpdateCounter(prev => prev + 1);
+
+      // Scroll to bottom
+      setTimeout(() => {
+        const messageContainer = document.querySelector('.message-container');
+        if (messageContainer) {
+          messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+      }, 100);
+
+      // Send message using StompClient
+      if (selectedConversation.type === 'private') {
+        stompClient.publish({
+          destination: '/app/chat.private',
+          body: JSON.stringify(messageData)
+        });
+        // console.log("Send private file message:", messageData);
+      } else {
+        stompClient.publish({
+          destination: '/app/chat.group',
+          body: JSON.stringify(messageData)
+        });
+        // console.log("Send group file message:", messageData);
+      }
+
+      // Reset file selection
+      setSelectedFile(null);
+      setUploadedFileUrl(null);
+      setUploadProgress(0);
+
+    } catch (error) {
+      console.error("Error sending file message:", error);
+      antMessage.error("Không thể gửi tập tin");
+    } finally {
+      setUploadLoading(false);
+    }
+  };
 
   return (
     <div>
-      <Title level={2}>Tin nhắn</Title>
-      
+      <Title level={2}>
+        Tin nhắn
+        <Badge
+          status={connectionStatus === 'online' ? "success" : "error"}
+          text={connectionStatus === 'online' ? "Kết nối" : "Mất kết nối"}
+          style={{ fontSize: '14px', marginLeft: '10px' }}
+        />
+      </Title>
+
       <Layout style={{ background: '#fff', padding: '24px 0', minHeight: 'calc(100vh - 200px)' }}>
         <Sider width={320} theme="light" style={{ borderRight: '1px solid #f0f0f0' }}>
           <div style={{ padding: '0 16px', marginBottom: 16 }}>
-            <Button 
-              type="primary" 
-              icon={<EditOutlined />} 
+            <Button
+              type="primary"
+              icon={<EditOutlined />}
               onClick={handleCompose}
               block
               style={{ marginBottom: 16 }}
             >
               Soạn tin nhắn
             </Button>
-            
+
             <Search
               placeholder="Tìm liên hệ..."
               onSearch={handleSearch}
               style={{ marginBottom: 16 }}
             />
-            
-            <Menu
-              mode="inline"
-              selectedKeys={[activeTab]}
-              onClick={({ key }) => setActiveTab(key)}
+
+            <Tabs
+              activeKey={activeTab}
+              onChange={setActiveTab}
               style={{ marginBottom: 16 }}
+              type="card"
             >
-              <Menu.Item key="inbox" icon={<InboxOutlined />}>
-                Hộp thư đến
-              </Menu.Item>
-              <Menu.Item key="starred" icon={<StarOutlined />}>
-                Đánh dấu sao
-              </Menu.Item>
-              <Menu.Item key="sent" icon={<SendOutlined />}>
-                Đã gửi
-              </Menu.Item>
-              <Menu.Item key="drafts" icon={<FileTextOutlined />}>
-                Bản nháp
-              </Menu.Item>
-            </Menu>
+              <TabPane tab={<span><UserOutlined /> Cá nhân</span>} key="private">
+                {/* Private chat contacts will be rendered below */}
+              </TabPane>
+              <TabPane tab={<span><TeamOutlined /> Nhóm</span>} key="group">
+                {/* Group chat contacts will be rendered below */}
+              </TabPane>
+            </Tabs>
           </div>
-          
+
           <Divider style={{ margin: '0 0 16px 0' }} />
-          
+
           <List
             loading={loading}
             dataSource={filteredContacts}
+            locale={{ emptyText: activeTab === 'private' ? 'Không có cuộc trò chuyện cá nhân' : 'Không có cuộc trò chuyện nhóm' }}
             renderItem={contact => (
-              <List.Item 
+              <List.Item
                 onClick={() => handleSelectContact(contact)}
-                style={{ 
-                  cursor: 'pointer', 
+                style={{
+                  cursor: 'pointer',
                   padding: '12px 16px',
                   background: selectedContact?.id === contact.id ? '#f5f5f5' : 'inherit'
                 }}
@@ -388,9 +1329,9 @@ const MessagesPage: React.FC = () => {
                 <List.Item.Meta
                   avatar={
                     <Badge count={contact.unreadCount} size="small">
-                      <Avatar 
-                        src={contact.avatar} 
-                        icon={!contact.avatar && <UserOutlined />}
+                      <Avatar
+                        src={contact.avatar}
+                        icon={!contact.avatar && (contact.type === 'group' ? <TeamOutlined /> : <UserOutlined />)}
                         size="large"
                       />
                     </Badge>
@@ -398,70 +1339,53 @@ const MessagesPage: React.FC = () => {
                   title={
                     <Space>
                       <Text strong>{contact.name}</Text>
-                      {contact.isTeacher && <Tag color="blue">Giáo viên</Tag>}
-                      <Badge 
-                        status={
-                          contact.status === 'online' 
-                            ? 'success' 
-                            : contact.status === 'busy' 
-                              ? 'warning' 
-                              : 'default'
-                        } 
+                      <Badge
+                        status={contact.status === 'online' ? 'success' : contact.status === 'busy' ? 'warning' : 'default'}
                       />
                     </Space>
                   }
                   description={
-                    contact.status === 'offline' && contact.lastActive 
-                      ? `Hoạt động ${new Date(contact.lastActive).toLocaleDateString('vi-VN')}`
-                      : contact.status === 'online' 
-                        ? 'Đang hoạt động'
-                        : 'Đang bận'
+                    contact.type === 'group'
+                      ? 'Nhóm trò chuyện'
+                      : (contact.status === 'offline' && contact.lastActive
+                        ? `Hoạt động ${new Date(contact.lastActive).toLocaleDateString('vi-VN')}`
+                        : contact.status === 'online'
+                          ? 'Đang hoạt động'
+                          : 'Đang bận')
                   }
                 />
               </List.Item>
             )}
           />
         </Sider>
-        
+
         <Content style={{ padding: '0 24px', minHeight: 280 }}>
-          {selectedContact ? (
+          {selectedContact && selectedConversation ? (
             <>
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '16px 0',
                 borderBottom: '1px solid #f0f0f0'
               }}>
                 <Space>
-                  <Avatar 
-                    src={selectedContact.avatar} 
+                  <Avatar
+                    src={selectedContact.avatar}
                     icon={!selectedContact.avatar && <UserOutlined />}
                     size="large"
                   />
                   <div>
-                    <Text strong style={{ fontSize: 16 }}>{selectedContact.name}</Text>
+                    <Text strong style={{ fontSize: 16 }}>{selectedConversation.receivedName}</Text>
                     <div>
-                      <Badge 
-                        status={
-                          selectedContact.status === 'online' 
-                            ? 'success' 
-                            : selectedContact.status === 'busy' 
-                              ? 'warning' 
-                              : 'default'
-                        } 
-                        text={
-                          selectedContact.status === 'online' 
-                            ? 'Đang hoạt động' 
-                            : selectedContact.status === 'busy'
-                              ? 'Đang bận'
-                              : 'Không hoạt động'
-                        }
+                      <Badge
+                        status={selectedContact.status === 'online' ? 'success' : 'default'}
+                        text={selectedConversation.type === 'group' ? 'Nhóm' : 'Trò chuyện riêng'}
                       />
                     </div>
                   </div>
                 </Space>
-                
+
                 <Space>
                   <Tooltip title="Tìm kiếm trong cuộc trò chuyện">
                     <Button icon={<SearchOutlined />} />
@@ -471,75 +1395,46 @@ const MessagesPage: React.FC = () => {
                   </Tooltip>
                 </Space>
               </div>
-              
-              <div style={{ 
-                height: 'calc(100vh - 380px)', 
-                overflowY: 'auto',
-                padding: '16px 0'
-              }}>
+
+              <div
+                className="message-container"
+                style={{
+                  height: 'calc(100vh - 380px)',
+                  overflowY: 'auto',
+                  padding: '16px 0',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+              >
                 {filteredMessages.length > 0 ? (
                   <List
                     itemLayout="vertical"
                     dataSource={filteredMessages}
                     renderItem={msg => {
-                      const isCurrentUser = msg.sender.id === 'current_user';
-                      
+                      // Updated to use both fields
+                      const isCurrentUser = isFromCurrentUser(msg.fromId, msg.senderId);
+
                       return (
                         <List.Item
-                          style={{ 
+                          style={{
                             textAlign: isCurrentUser ? 'right' : 'left',
                             padding: '8px 0'
                           }}
-                          actions={[
-                            <Space style={{ display: 'inline-flex' }}>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                {new Date(msg.timestamp).toLocaleTimeString('vi-VN', { 
-                                  hour: '2-digit', 
-                                  minute: '2-digit' 
-                                })}
-                              </Text>
-                              {!isCurrentUser && (
-                                <Tooltip title={msg.isStarred ? "Bỏ đánh dấu sao" : "Đánh dấu sao"}>
-                                  <Button 
-                                    type="text" 
-                                    size="small" 
-                                    icon={msg.isStarred ? <StarFilled /> : <StarOutlined />}
-                                    onClick={() => handleToggleStarred(msg.id)}
-                                  />
-                                </Tooltip>
-                              )}
-                              <Tooltip title="Xóa tin nhắn">
-                                <Popconfirm
-                                  title="Bạn có chắc muốn xóa tin nhắn này?"
-                                  onConfirm={() => handleDeleteMessage(msg.id)}
-                                  okText="Có"
-                                  cancelText="Không"
-                                >
-                                  <Button 
-                                    type="text" 
-                                    size="small" 
-                                    danger
-                                    icon={<DeleteOutlined />}
-                                  />
-                                </Popconfirm>
-                              </Tooltip>
-                            </Space>
-                          ]}
+                          key={msg.id}
                         >
-                          <div style={{ 
-                            display: 'flex', 
+                          <div style={{
+                            display: 'flex',
                             flexDirection: isCurrentUser ? 'row-reverse' : 'row',
                             alignItems: 'flex-start',
                             gap: 16
                           }}>
                             {!isCurrentUser && (
-                              <Avatar 
-                                src={msg.sender.avatar} 
-                                icon={!msg.sender.avatar && <UserOutlined />}
+                              <Avatar
+                                icon={<UserOutlined />}
                               />
                             )}
-                            
-                            <div style={{ 
+
+                            <div style={{
                               maxWidth: '70%',
                               background: isCurrentUser ? '#1890ff' : '#f5f5f5',
                               color: isCurrentUser ? 'white' : 'inherit',
@@ -548,19 +1443,134 @@ const MessagesPage: React.FC = () => {
                               display: 'inline-block',
                               textAlign: 'left'
                             }}>
-                              <Paragraph style={{ margin: 0 }}>
-                                {msg.content}
-                              </Paragraph>
-                              
-                              {msg.attachments && msg.attachments.length > 0 && (
-                                <div style={{ marginTop: 8 }}>
-                                  {msg.attachments.map(attachment => (
-                                    <Tag icon={<PaperClipOutlined />} color="blue" key={attachment}>
-                                      {attachment}
-                                    </Tag>
-                                  ))}
+                              {/* Show different content based on message type */}
+                              {msg.messageType === 'image' && msg.imageUrl ? (
+                                <div style={{ marginBottom: '8px' }}>
+                                  <Image
+                                    src={msg.imageUrl}
+                                    alt="Image"
+                                    style={{ maxWidth: '100%', borderRadius: '6px' }}
+                                    preview={{
+                                      mask: <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: 'white'
+                                      }}>
+                                        <SearchOutlined style={{ marginRight: '5px' }} /> Xem
+                                      </div>
+                                    }}
+                                  />
                                 </div>
+                              ) : msg.messageType === 'file' && msg.fileUrl ? (
+                                <div style={{
+                                  border: '1px solid ' + (isCurrentUser ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)'),
+                                  borderRadius: '6px',
+                                  padding: '8px',
+                                  marginBottom: '8px',
+                                  cursor: 'pointer'
+                                }}
+                                  onClick={() => window.open(msg.fileUrl, '_blank')}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                                    {getFileIcon(msg.fileName || '', msg.fileType)}
+                                    <div style={{ marginLeft: '8px', overflow: 'hidden' }}>
+                                      <div style={{
+                                        fontWeight: 'bold',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: '200px'
+                                      }}>
+                                        {msg.fileName || 'Tập tin'}
+                                      </div>
+                                      {msg.fileSize && (
+                                        <div style={{
+                                          fontSize: '11px',
+                                          color: isCurrentUser ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.45)'
+                                        }}>
+                                          {formatFileSize(msg.fileSize)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center' }}>
+                                    <DownloadOutlined style={{ marginRight: '5px', color: isCurrentUser ? 'rgba(255,255,255,0.85)' : undefined }} />
+                                    <span style={{
+                                      fontSize: '12px',
+                                      color: isCurrentUser ? 'rgba(255,255,255,0.85)' : undefined
+                                    }}>
+                                      Tải xuống
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : isImageUrl(msg.content) ? (
+                                <div style={{ marginBottom: '8px' }}>
+                                  <Image
+                                    src={msg.content}
+                                    alt="Image"
+                                    style={{ maxWidth: '100%', borderRadius: '6px' }}
+                                    preview={{
+                                      mask: <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: 'white'
+                                      }}>
+                                        <SearchOutlined style={{ marginRight: '5px' }} /> Xem
+                                      </div>
+                                    }}
+                                  />
+                                </div>
+                              ) : isFileUrl(msg.content) ? (
+                                <div style={{
+                                  border: '1px solid ' + (isCurrentUser ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)'),
+                                  borderRadius: '6px',
+                                  padding: '8px',
+                                  marginBottom: '8px',
+                                  cursor: 'pointer'
+                                }}
+                                  onClick={() => window.open(msg.content, '_blank')}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                                    {getFileIcon(getFileNameFromUrl(msg.content), '')}
+                                    <div style={{ marginLeft: '8px', overflow: 'hidden' }}>
+                                      <div style={{
+                                        fontWeight: 'bold',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: '200px'
+                                      }}>
+                                        {getFileNameFromUrl(msg.content)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center' }}>
+                                    <DownloadOutlined style={{ marginRight: '5px', color: isCurrentUser ? 'rgba(255,255,255,0.85)' : undefined }} />
+                                    <span style={{
+                                      fontSize: '12px',
+                                      color: isCurrentUser ? 'rgba(255,255,255,0.85)' : undefined
+                                    }}>
+                                      Tải xuống
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <Paragraph style={{ margin: 0 }}>
+                                  {msg.content}
+                                </Paragraph>
                               )}
+                              <div style={{
+                                fontSize: '11px',
+                                marginTop: 4,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                color: isCurrentUser ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.45)'
+                              }}>
+                                <span>{formatDate(msg.timestamp)}</span>
+                              </div>
                             </div>
                           </div>
                         </List.Item>
@@ -571,29 +1581,148 @@ const MessagesPage: React.FC = () => {
                   <Empty description="Không có tin nhắn" />
                 )}
               </div>
-              
-              <div style={{ 
-                borderTop: '1px solid #f0f0f0', 
+
+              <div style={{
+                borderTop: '1px solid #f0f0f0',
                 padding: '16px 0'
               }}>
+                {/* Display selected image preview */}
+                {selectedImage && (
+                  <div style={{
+                    marginBottom: 16,
+                    border: '1px solid #f0f0f0',
+                    padding: 16,
+                    borderRadius: 4,
+                    position: 'relative'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text strong>Hình ảnh đã chọn</Text>
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={removeSelectedImage}
+                        size="small"
+                      />
+                    </div>
+                    <div style={{ textAlign: 'center', position: 'relative' }}>
+                      <img
+                        src={selectedImage.url || ''}
+                        alt="Preview"
+                        style={{ maxWidth: '100%', maxHeight: '200px' }}
+                      />
+                      {uploadLoading && (
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          background: 'rgba(0,0,0,0.4)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Spin indicator={<LoadingOutlined style={{ fontSize: 24, color: '#fff' }} spin />} />
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      type="primary"
+                      block
+                      onClick={sendImageMessage}
+                      style={{ marginTop: 8 }}
+                      loading={uploadLoading}
+                    >
+                      Gửi hình ảnh
+                    </Button>
+                  </div>
+                )}
+
+                {/* Display selected file */}
+                {selectedFile && (
+                  <div style={{
+                    marginBottom: 16,
+                    border: '1px solid #f0f0f0',
+                    padding: 16,
+                    borderRadius: 4,
+                    position: 'relative'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text strong>Tập tin đã chọn</Text>
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={removeSelectedFile}
+                        size="small"
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '8px' }}>
+                      {getFileIcon(selectedFile.name || '', selectedFile.type)}
+                      <div style={{ marginLeft: 16, flexGrow: 1 }}>
+                        <div style={{ fontWeight: 'bold' }}>{selectedFile.name}</div>
+                        <div style={{ color: '#888', fontSize: '12px' }}>
+                          {selectedFile.size && formatFileSize(selectedFile.size)}
+                        </div>
+                      </div>
+                    </div>
+                    {uploadProgress > 0 && uploadProgress < 100 && (
+                      <Progress percent={uploadProgress} size="small" status="active" />
+                    )}
+                    <Button
+                      type="primary"
+                      block
+                      onClick={sendFileMessage}
+                      style={{ marginTop: 8 }}
+                      loading={uploadLoading}
+                    >
+                      Gửi tập tin
+                    </Button>
+                  </div>
+                )}
+
                 <Input.TextArea
                   rows={3}
                   value={newMessage}
                   onChange={e => setNewMessage(e.target.value)}
                   placeholder="Nhập tin nhắn..."
                   style={{ marginBottom: 16 }}
+                  onKeyDown={e => {
+                    // Send message when pressing Enter (without Shift)
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (newMessage.trim()) {
+                        handleSendMessage();
+                      }
+                    }
+                  }}
                 />
-                
+
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Space>
-                    <Tooltip title="Đính kèm tệp">
-                      <Button icon={<PaperClipOutlined />} />
-                    </Tooltip>
+                    <Upload
+                      beforeUpload={handleImageSelect}
+                      showUploadList={false}
+                      accept="image/*"
+                    >
+                      <Tooltip title="Gửi hình ảnh">
+                        <Button icon={<PictureOutlined />} />
+                      </Tooltip>
+                    </Upload>
+                    <Upload
+                      beforeUpload={handleFileSelect}
+                      showUploadList={false}
+                    >
+                      <Tooltip title="Gửi tập tin">
+                        <Button icon={<PaperClipOutlined />} />
+                      </Tooltip>
+                    </Upload>
                   </Space>
-                  
-                  <Button 
-                    type="primary" 
-                    icon={<SendOutlined />} 
+
+                  <Button
+                    type="primary"
+                    icon={<SendOutlined />}
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim()}
                   >
@@ -607,7 +1736,7 @@ const MessagesPage: React.FC = () => {
           )}
         </Content>
       </Layout>
-      
+
       {/* Modal soạn tin nhắn mới */}
       <Modal
         title="Soạn tin nhắn mới"
@@ -617,9 +1746,9 @@ const MessagesPage: React.FC = () => {
           <Button key="back" onClick={() => setIsComposeVisible(false)}>
             Hủy
           </Button>,
-          <Button 
-            key="submit" 
-            type="primary" 
+          <Button
+            key="submit"
+            type="primary"
             onClick={handleSubmitCompose}
           >
             Gửi
@@ -644,15 +1773,14 @@ const MessagesPage: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
-          
+
           <Form.Item
             name="subject"
             label="Tiêu đề"
-            rules={[{ required: true, message: 'Vui lòng nhập tiêu đề' }]}
           >
             <Input />
           </Form.Item>
-          
+
           <Form.Item
             name="messageContent"
             label="Nội dung"
@@ -660,7 +1788,7 @@ const MessagesPage: React.FC = () => {
           >
             <TextArea rows={4} />
           </Form.Item>
-          
+
           <Form.Item
             name="attachment"
             label="Đính kèm tệp"
@@ -673,4 +1801,5 @@ const MessagesPage: React.FC = () => {
   );
 };
 
-export default MessagesPage; 
+export default MessagesPage;
+

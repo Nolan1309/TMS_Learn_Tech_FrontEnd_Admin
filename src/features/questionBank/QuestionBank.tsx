@@ -880,6 +880,18 @@ const QuestionBankPage: React.FC = () => {
       title: 'Ngày tạo',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      render: (date: string) => <Typography.Text type="secondary">
+        {new Date(date).toLocaleString('vi-VN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        })}
+      </Typography.Text>,
+      sorter: (a: Question, b: Question) => a.createdAt?.localeCompare(b.createdAt || '') || 0,
     },
     {
       title: 'Hành động',
@@ -1626,7 +1638,15 @@ const QuestionBankPage: React.FC = () => {
             <div style={{ marginBottom: 16 }}>
               <Space>
                 <span><strong>Khóa học:</strong> {courses.find(c => c.id === previewQuestion.courseId)?.name || 'Không xác định'}</span>
-                <span><strong>Ngày tạo:</strong> {previewQuestion.createdAt}</span>
+                <span><strong>Ngày tạo:</strong> {previewQuestion.createdAt ? new Date(previewQuestion.createdAt).toLocaleString('vi-VN', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false
+                }) : 'Không xác định'}</span>
               </Space>
             </div>
 

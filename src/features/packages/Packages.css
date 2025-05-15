@@ -1,0 +1,85 @@
+/* Styling for packages page */
+.ant-table-fixed-column .ant-table-cell-fix-left,
+.ant-table-fixed-column .ant-table-cell-fix-right {
+  background-color: #fff;
+  z-index: 2;
+}
+
+/* Add shadow to fixed columns for better visual separation */
+.ant-table-cell-fix-left-last::after,
+.ant-table-cell-fix-right-first::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30px;
+  pointer-events: none;
+  content: '';
+}
+
+.ant-table-cell-fix-left-last::after {
+  right: -30px;
+  box-shadow: inset 10px 0 8px -8px rgba(0, 0, 0, 0.1);
+}
+
+.ant-table-cell-fix-right-first::after {
+  left: -30px;
+  box-shadow: inset -10px 0 8px -8px rgba(0, 0, 0, 0.1);
+}
+
+/* Package card styles */
+.package-card {
+  border-radius: 8px;
+  transition: all 0.3s;
+  margin-bottom: 16px;
+}
+
+.package-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-3px);
+}
+
+.package-card .ant-card-head {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.package-card .ant-card-body {
+  padding: 20px;
+}
+
+.package-price {
+  font-size: 24px;
+  color: #1890ff;
+  margin-bottom: 16px;
+}
+
+.package-original-price {
+  text-decoration: line-through;
+  color: #999;
+  font-size: 16px;
+  margin-left: 8px;
+}
+
+.package-type-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-radius: 0 8px 0 8px;
+  padding: 4px 12px;
+}
+
+.package-badge-member {
+  background-color: #722ed1;
+  color: white;
+}
+
+.package-badge-combo {
+  background-color: #faad14;
+  color: white;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .package-card {
+    width: 100%;
+  }
+} 

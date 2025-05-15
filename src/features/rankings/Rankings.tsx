@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 import { Tabs, Card, Typography } from 'antd';
 import InstructorRankings from './InstructorRankings';
 import StudentRankings from './StudentRankings';
+import RewardManagement from './RewardManagement';
+import {
+  TrophyOutlined,
+  UserOutlined,
+  GiftOutlined
+} from '@ant-design/icons';
 import './Rankings.css';
 
 const { Title } = Typography;
@@ -20,11 +26,23 @@ const Rankings: React.FC = () => {
       
       <Card bordered={false} className="ranking-card">
         <Tabs activeKey={activeTab} onChange={handleTabChange}>
-          <TabPane tab="Xếp hạng giảng viên" key="instructor">
+          <TabPane 
+            tab={<span><TrophyOutlined /> Xếp hạng giảng viên</span>} 
+            key="instructor"
+          >
             <InstructorRankings />
           </TabPane>
-          <TabPane tab="Xếp hạng học viên" key="student">
+          <TabPane 
+            tab={<span><UserOutlined /> Xếp hạng học viên</span>} 
+            key="student"
+          >
             <StudentRankings />
+          </TabPane>
+          <TabPane 
+            tab={<span><GiftOutlined /> Quản lý phần thưởng</span>} 
+            key="rewards"
+          >
+            <RewardManagement />
           </TabPane>
         </Tabs>
       </Card>
