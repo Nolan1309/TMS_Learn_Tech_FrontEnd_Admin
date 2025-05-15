@@ -11,7 +11,8 @@ import {
   MailOutlined, InboxOutlined, FileTextOutlined, LoadingOutlined,
   CheckOutlined, CheckCircleOutlined, PictureOutlined, UploadOutlined,
   FileOutlined, FilePdfOutlined, FileWordOutlined, FileExcelOutlined,
-  FileZipOutlined, FileUnknownOutlined, DownloadOutlined, CopyOutlined
+  FileZipOutlined, FileUnknownOutlined, DownloadOutlined, CopyOutlined,
+  BellOutlined
 } from '@ant-design/icons';
 import TextArea from 'antd/lib/input/TextArea';
 import SockJS from 'sockjs-client';
@@ -23,7 +24,6 @@ import { useUserStatus } from '../../utils/UserStatusProvider';
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
-const { TabPane } = Tabs;
 const { Sider, Content } = Layout;
 
 // Định nghĩa các interface cho cấu trúc dữ liệu
@@ -35,6 +35,7 @@ interface Message {
   receiveId?: number;
   conversationId?: number; // Added to match the received format
   senderUsername?: string;
+  avatarUrl?: string;     // URL to the sender's avatar
   messageType?: string;    // Added to match the received format
   status?: string;         // Added to match the received format
   timestamp: string;
@@ -80,6 +81,8 @@ interface Contact {
   roleSender?: string;
   fromEmail?: string;
   receivedEmail?: string;
+  lastMessage?: Message;
+  lastMessageTimestamp?: string;
 }
 
 const MessagesPage: React.FC = () => {
@@ -204,7 +207,7 @@ const MessagesPage: React.FC = () => {
       // Create contacts from conversations with type
       const extractedContacts: Contact[] = conversationsWithSortedMessages.map((conv: Conversation) => ({
         id: conv.id.toString(),
-        name: conv.receivedName,
+        name: conv.type === 'group' ? conv.name : conv.receivedName,
         avatar: conv.avatarReceived,
         type: conv.type, // Set type based on conversation type
         status: 'offline',
@@ -268,6 +271,8 @@ const MessagesPage: React.FC = () => {
 
         const userId = getCurrentUserId();
         if (userId) {
+          
+          // Subscribe to private messages
           client!.subscribe(`/user/${userId}/queue/messages`, (message) => {
             try {
               const receivedMsg = JSON.parse(message.body);
@@ -282,6 +287,16 @@ const MessagesPage: React.FC = () => {
 
               // Handle the new message format and update the conversations
               if (receivedMsg && receivedMsg.conversationId) {
+                // Kiểm tra xem tin nhắn này có phải do chính người dùng hiện tại gửi không
+                const isFromCurrentUser = receivedMsg.senderId === userId || receivedMsg.fromId === userId;
+                
+                // Nếu tin nhắn do chính người dùng hiện tại gửi, không cần xử lý lại
+                // vì đã được thêm vào danh sách tin nhắn khi gửi đi
+                if (isFromCurrentUser) {
+                  console.log("Skipping own message received from WebSocket");
+                  return;
+                }
+                
                 // First update the apiConversations state
                 setApiConversations(prevConversations => {
                   // Create a new array with the updated conversation
@@ -418,12 +433,41 @@ const MessagesPage: React.FC = () => {
                     }
                   }, 100);
                 }
+
+                // Update lastMessage in contacts when receiving new message
+                setContacts(prevContacts => {
+                  return prevContacts.map(contact => {
+                    if (contact.id === receivedMsg.conversationId.toString()) {
+                      // Nếu tin nhắn không phải từ người dùng hiện tại và không phải là contact đang được chọn
+                      // thì tăng unreadCount
+                      const isSelectedContact = selectedContact && selectedContact.id === contact.id;
+                      
+                      // Kiểm tra xem tin nhắn này đã được xử lý chưa để tránh tăng unreadCount hai lần
+                      const messageAlreadyExists = apiConversations.some(conv => 
+                        conv.id === receivedMsg.conversationId && 
+                        conv.messages && 
+                        conv.messages.some(msg => msg.id === receivedMsg.id)
+                      );
+                      
+                      // Chỉ tăng unreadCount nếu tin nhắn mới, không phải từ người dùng hiện tại và không phải là contact đang được chọn
+                      const shouldIncreaseUnreadCount = !messageAlreadyExists && !isFromCurrentUser && !isSelectedContact;
+                      
+                      return {
+                        ...contact,
+                        lastMessage: receivedMsg,
+                        lastMessageTimestamp: receivedMsg.timestamp,
+                        unreadCount: shouldIncreaseUnreadCount ? contact.unreadCount + 1 : contact.unreadCount
+                      };
+                    }
+                    return contact;
+                  });
+                });
               }
             } catch (error) {
               console.error('Error processing received message:', error);
             }
           });
-
+          
           // Also subscribe to online status updates for other users
           client!.subscribe('/topic/online-users', (message) => {
             console.log("Received online status update:", message.body);
@@ -431,9 +475,7 @@ const MessagesPage: React.FC = () => {
           });
           client!.subscribe('/topic/status', function (message) {
             const status = JSON.parse(message.body);
-            console.log("status: ", status);
             if (status.online) {
-              console.log(status.username + " vừa online");
               setContacts(prevContacts => prevContacts.map(contact => {
                 if (contact.receivedEmail === status.username) {
                   return {
@@ -444,7 +486,6 @@ const MessagesPage: React.FC = () => {
                 return contact;
               }));
             } else {
-              console.log(status.username + " vừa offline");
               setContacts(prevContacts => prevContacts.map(contact => {
                 if (contact.receivedEmail === status.username) {
                   return {
@@ -519,6 +560,20 @@ const MessagesPage: React.FC = () => {
       return;
     }
 
+    // Lấy thông tin username và avatar từ localStorage
+    const authData = localStorage.getItem("authData");
+    let username = "Người dùng";
+    let avatarUrl = "";
+    if (authData) {
+      try {
+        const userData = JSON.parse(authData);
+        username = userData.username || userData.email || "Người dùng";
+        avatarUrl = userData.avatarUrl || "";
+      } catch (error) {
+        console.error("Error parsing authData:", error);
+      }
+    }
+
     // Prepare message data
     const messageData = {
       content: newMessage,
@@ -532,7 +587,9 @@ const MessagesPage: React.FC = () => {
             : selectedConversation.messages[0].fromId)
           : null)
         : null,
-      type: selectedConversation.type
+      type: selectedConversation.type,
+      senderUsername: username,  // Thêm tên người gửi
+      avatarUrl: avatarUrl       // Thêm avatar người gửi
     };
 
     try {
@@ -543,7 +600,9 @@ const MessagesPage: React.FC = () => {
         fromId: userId,
         conversationId: selectedConversation.id,
         timestamp: new Date().toISOString(),
-        status: 'sending'
+        status: 'sending',
+        senderUsername: username,  // Thêm tên người gửi
+        avatarUrl: avatarUrl       // Thêm avatar người gửi
       };
 
       // Add the temporary message to the selected conversation
@@ -569,6 +628,20 @@ const MessagesPage: React.FC = () => {
         });
       });
 
+      // Update lastMessage in contacts
+      setContacts(prevContacts => {
+        return prevContacts.map(contact => {
+          if (contact.id === selectedConversation.id.toString()) {
+            return {
+              ...contact,
+              lastMessage: tempMessage,
+              lastMessageTimestamp: tempMessage.timestamp
+            };
+          }
+          return contact;
+        });
+      });
+
       // Force a re-render
       setMessageUpdateCounter(prev => prev + 1);
 
@@ -591,7 +664,7 @@ const MessagesPage: React.FC = () => {
       } else {
         // Send group message
         stompClient.publish({
-          destination: '/app/chat.group',
+          destination: `/app/chat.group.${selectedConversation.id}`,
           body: JSON.stringify(messageData)
         });
         console.log("Send group message:", messageData);
@@ -626,12 +699,15 @@ const MessagesPage: React.FC = () => {
       setSelectedConversation(conversation);
     }
 
-    // Update read status in UI
+    // Update read status in UI - đặt unreadCount về 0
     setContacts(contacts.map(c => {
       if (c.id === contact.id) {
         return {
-          ...c, unreadCount: 0, roleReceiver: contact.roleReceiver,
-          roleSender: contact.roleSender, lastActive: contact.lastActive,
+          ...c, 
+          unreadCount: 0, 
+          roleReceiver: contact.roleReceiver,
+          roleSender: contact.roleSender, 
+          lastActive: contact.lastActive,
           avatarReceived: contact.avatar,
           name: contact.name,
           type: contact.type,
@@ -819,12 +895,6 @@ const MessagesPage: React.FC = () => {
         }
       });
 
-
-      // if (response.data && response.data.data) {
-      //   console.log('Found data field:', response.data.data);
-      //   console.log('Data field type:', typeof response.data.data);
-      // }
-
       // Check if the response contains the image URL
       if (response.data && response.data.data) {
         // ApiResponse format with data field
@@ -865,6 +935,20 @@ const MessagesPage: React.FC = () => {
         return;
       }
 
+      // Lấy thông tin username và avatar từ localStorage
+      const authData = localStorage.getItem("authData");
+      let username = "Người dùng";
+      let avatarUrl = "";
+      if (authData) {
+        try {
+          const userData = JSON.parse(authData);
+          username = userData.username || userData.email || "Người dùng";
+          avatarUrl = userData.avatarUrl || "";
+        } catch (error) {
+          console.error("Error parsing authData:", error);
+        }
+      }
+
       // Prepare message data
       const messageData = {
         content: imageUrl,  // Use the image URL as content
@@ -879,7 +963,9 @@ const MessagesPage: React.FC = () => {
           : null,
         type: selectedConversation.type,
         messageType: 'image',
-        imageUrl: imageUrl  // Also include imageUrl property
+        imageUrl: imageUrl,  // Also include imageUrl property
+        senderUsername: username,  // Thêm tên người gửi
+        avatarUrl: avatarUrl       // Thêm avatar người gửi
       };
 
       // Create a temporary message to display immediately
@@ -892,7 +978,8 @@ const MessagesPage: React.FC = () => {
         status: 'sending',
         messageType: 'image',
         imageUrl: imageUrl,  // Also include imageUrl property
-
+        senderUsername: username,  // Thêm tên người gửi
+        avatarUrl: avatarUrl       // Thêm avatar người gửi
       };
 
       // Add the temporary message to the selected conversation
@@ -918,6 +1005,20 @@ const MessagesPage: React.FC = () => {
         });
       });
 
+      // Update lastMessage in contacts
+      setContacts(prevContacts => {
+        return prevContacts.map(contact => {
+          if (contact.id === selectedConversation.id.toString()) {
+            return {
+              ...contact,
+              lastMessage: tempMessage,
+              lastMessageTimestamp: tempMessage.timestamp
+            };
+          }
+          return contact;
+        });
+      });
+
       // Force a re-render
       setMessageUpdateCounter(prev => prev + 1);
 
@@ -935,13 +1036,11 @@ const MessagesPage: React.FC = () => {
           destination: '/app/chat.private',
           body: JSON.stringify(messageData)
         });
-        // console.log("Send private image message:", messageData);
       } else {
         stompClient.publish({
-          destination: '/app/chat.group',
+          destination: `/app/chat.group.${selectedConversation.id}`,
           body: JSON.stringify(messageData)
         });
-        // console.log("Send group image message:", messageData);
       }
 
       // Reset image selection
@@ -1118,8 +1217,6 @@ const MessagesPage: React.FC = () => {
         }
       });
 
-      //  console.log('File upload response:', response.data);
-
       // Check if the response contains the file URL
       if (response.data && response.data.data) {
         // ApiResponse format with data field
@@ -1168,6 +1265,20 @@ const MessagesPage: React.FC = () => {
         return;
       }
 
+      // Lấy thông tin username và avatar từ localStorage
+      const authData = localStorage.getItem("authData");
+      let username = "Người dùng";
+      let avatarUrl = "";
+      if (authData) {
+        try {
+          const userData = JSON.parse(authData);
+          username = userData.username || userData.email || "Người dùng";
+          avatarUrl = userData.avatarUrl || "";
+        } catch (error) {
+          console.error("Error parsing authData:", error);
+        }
+      }
+
       // Prepare message data
       const messageData = {
         content: fileUrl,  // Use file name as content
@@ -1185,11 +1296,11 @@ const MessagesPage: React.FC = () => {
         fileUrl: fileUrl,
         fileName: selectedFile.name,
         fileSize: selectedFile.size,
-        fileType: selectedFile.type
+        fileType: selectedFile.type,
+        senderUsername: username,  // Thêm tên người gửi
+        avatarUrl: avatarUrl       // Thêm avatar người gửi
       };
-
-      // console.log("Sending file message with URL:", fileUrl);
-
+        
       // Create a temporary message to display immediately
       const tempMessage: Message = {
         id: Date.now(),
@@ -1202,7 +1313,9 @@ const MessagesPage: React.FC = () => {
         fileUrl: fileUrl,
         fileName: selectedFile.name,
         fileSize: selectedFile.size,
-        fileType: selectedFile.type
+        fileType: selectedFile.type,
+        senderUsername: username,  // Thêm tên người gửi
+        avatarUrl: avatarUrl       // Thêm avatar người gửi
       };
 
       // Add the temporary message to the selected conversation
@@ -1227,6 +1340,20 @@ const MessagesPage: React.FC = () => {
         });
       });
 
+      // Update lastMessage in contacts
+      setContacts(prevContacts => {
+        return prevContacts.map(contact => {
+          if (contact.id === selectedConversation.id.toString()) {
+            return {
+              ...contact,
+              lastMessage: tempMessage,
+              lastMessageTimestamp: tempMessage.timestamp
+            };
+          }
+          return contact;
+        });
+      });
+
       // Force a re-render
       setMessageUpdateCounter(prev => prev + 1);
 
@@ -1244,13 +1371,11 @@ const MessagesPage: React.FC = () => {
           destination: '/app/chat.private',
           body: JSON.stringify(messageData)
         });
-        // console.log("Send private file message:", messageData);
       } else {
         stompClient.publish({
-          destination: '/app/chat.group',
+          destination: `/app/chat.group.${selectedConversation.id}`,
           body: JSON.stringify(messageData)
         });
-        // console.log("Send group file message:", messageData);
       }
 
       // Reset file selection
@@ -1265,6 +1390,123 @@ const MessagesPage: React.FC = () => {
       setUploadLoading(false);
     }
   };
+
+  // Đăng ký lắng nghe các cuộc hội thoại nhóm khi apiConversations thay đổi
+  useEffect(() => {
+    if (stompClient && stompClient.connected && apiConversations.length > 0) {
+      // Lọc ra các cuộc hội thoại nhóm
+      const groupConversations = apiConversations.filter(conv => conv.type === 'group');
+      
+      // Đăng ký lắng nghe cho từng cuộc hội thoại nhóm
+      groupConversations.forEach(conversation => {
+        const conversationId = conversation.id;
+        console.log(`Subscribing to group conversation: ${conversationId}`);
+        
+        // Đăng ký lắng nghe tin nhắn từ nhóm
+        stompClient.subscribe(`/topic/conversation/${conversationId}`, (message) => {
+          try {
+            console.log(`Received message from group ${conversationId}:`, message.body);
+            const receivedMsg = JSON.parse(message.body);
+            
+            // Xử lý tin nhắn nhóm tương tự như tin nhắn cá nhân
+            if (receivedMsg && receivedMsg.conversationId) {
+              // Kiểm tra xem tin nhắn này có phải do chính người dùng hiện tại gửi không
+              const isFromCurrentUser = receivedMsg.senderId === currentUserId || receivedMsg.fromId === currentUserId;
+              
+              // Nếu tin nhắn do chính người dùng hiện tại gửi, không cần xử lý lại
+              // vì đã được thêm vào danh sách tin nhắn khi gửi đi
+              if (isFromCurrentUser) {
+                console.log("Skipping own message received from WebSocket");
+                return;
+              }
+              
+              // First update the apiConversations state
+              setApiConversations(prevConversations => {
+                // Create a new array with the updated conversation
+                return prevConversations.map(conv => {
+                  if (conv.id === receivedMsg.conversationId) {
+                    // Check if message already exists to prevent duplicates
+                    const messageExists = conv.messages?.some(msg => msg.id === receivedMsg.id);
+                    if (messageExists) {
+                      return conv; // Don't add duplicate message
+                    }
+
+                    // Add the new message to this conversation
+                    return {
+                      ...conv,
+                      messages: [...(conv.messages || []), receivedMsg]
+                    };
+                  }
+                  return conv;
+                });
+              });
+
+              // Then update selectedConversation if it matches the conversation ID
+              if (selectedConversation && selectedConversation.id === receivedMsg.conversationId) {
+                setSelectedConversation(prevSelected => {
+                  if (!prevSelected) return null;
+
+                  // Check if message already exists to prevent duplicates
+                  const messageExists = prevSelected.messages?.some(msg => msg.id === receivedMsg.id);
+                  if (messageExists) {
+                    return prevSelected; // Don't add duplicate message
+                  }
+
+                  // Add the new message to the selected conversation
+                  return {
+                    ...prevSelected,
+                    messages: [...(prevSelected.messages || []), receivedMsg]
+                  };
+                });
+
+                // Force a re-render by incrementing the counter
+                setMessageUpdateCounter(prev => prev + 1);
+
+                // Scroll to bottom after new message is added
+                setTimeout(() => {
+                  const messageContainer = document.querySelector('.message-container');
+                  if (messageContainer) {
+                    messageContainer.scrollTop = messageContainer.scrollHeight;
+                  }
+                }, 100);
+              }
+
+              // Update lastMessage in contacts when receiving new message
+              setContacts(prevContacts => {
+                return prevContacts.map(contact => {
+                  if (contact.id === receivedMsg.conversationId.toString()) {
+                    // Nếu tin nhắn không phải từ người dùng hiện tại và không phải là contact đang được chọn
+                    // thì tăng unreadCount
+                    const isSelectedContact = selectedContact && selectedContact.id === contact.id;
+                    
+                    // Kiểm tra xem tin nhắn này đã được xử lý chưa để tránh tăng unreadCount hai lần
+                    const messageAlreadyExists = apiConversations.some(conv => 
+                      conv.id === receivedMsg.conversationId && 
+                      conv.messages && 
+                      conv.messages.some(msg => msg.id === receivedMsg.id)
+                    );
+                    
+                    // Chỉ tăng unreadCount nếu tin nhắn mới, không phải từ người dùng hiện tại và không phải là contact đang được chọn
+                    const shouldIncreaseUnreadCount = !messageAlreadyExists && !isFromCurrentUser && !isSelectedContact;
+                    
+                    return {
+                      ...contact,
+                      lastMessage: receivedMsg,
+                      lastMessageTimestamp: receivedMsg.timestamp,
+                      unreadCount: shouldIncreaseUnreadCount ? contact.unreadCount + 1 : contact.unreadCount
+                    };
+                  }
+                  return contact;
+                });
+              });
+            }
+          } catch (error) {
+            console.error(`Error processing message from group ${conversationId}:`, error);
+          }
+        });
+      });
+    }
+  }, [stompClient, apiConversations, currentUserId, selectedContact, selectedConversation]);
 
   return (
     <div>
@@ -1301,14 +1543,17 @@ const MessagesPage: React.FC = () => {
               onChange={setActiveTab}
               style={{ marginBottom: 16 }}
               type="card"
-            >
-              <TabPane tab={<span><UserOutlined /> Cá nhân</span>} key="private">
-                {/* Private chat contacts will be rendered below */}
-              </TabPane>
-              <TabPane tab={<span><TeamOutlined /> Nhóm</span>} key="group">
-                {/* Group chat contacts will be rendered below */}
-              </TabPane>
-            </Tabs>
+              items={[
+                {
+                  key: 'private',
+                  label: <span><UserOutlined /> Cá nhân</span>,
+                },
+                {
+                  key: 'group',
+                  label: <span><TeamOutlined /> Nhóm</span>,
+                }
+              ]}
+            />
           </div>
 
           <Divider style={{ margin: '0 0 16px 0' }} />
@@ -1328,30 +1573,62 @@ const MessagesPage: React.FC = () => {
               >
                 <List.Item.Meta
                   avatar={
-                    <Badge count={contact.unreadCount} size="small">
-                      <Avatar
-                        src={contact.avatar}
-                        icon={!contact.avatar && (contact.type === 'group' ? <TeamOutlined /> : <UserOutlined />)}
-                        size="large"
-                      />
-                    </Badge>
+                    <Avatar
+                      src={contact.avatar}
+                      icon={!contact.avatar && (contact.type === 'group' ? <TeamOutlined /> : <UserOutlined />)}
+                      size="large"
+                    />
                   }
                   title={
                     <Space>
-                      <Text strong>{contact.name}</Text>
+                      {contact.type === 'group' ? (
+                        <Text strong>{contact.name}</Text>
+                      ) : (
+                        <Text strong>{contact.name}</Text>
+                      )}
                       <Badge
                         status={contact.status === 'online' ? 'success' : contact.status === 'busy' ? 'warning' : 'default'}
                       />
+                      {contact.unreadCount > 0 && (
+                        <BellOutlined style={{ color: '#ff4d4f' }} />
+                      )}
                     </Space>
                   }
                   description={
-                    contact.type === 'group'
-                      ? 'Nhóm trò chuyện'
-                      : (contact.status === 'offline' && contact.lastActive
-                        ? `Hoạt động ${new Date(contact.lastActive).toLocaleDateString('vi-VN')}`
-                        : contact.status === 'online'
-                          ? 'Đang hoạt động'
-                          : 'Đang bận')
+                    <>
+                      {contact.lastMessage && (
+                        <div style={{ 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis', 
+                          maxWidth: '200px',
+                          fontWeight: contact.unreadCount > 0 ? 'bold' : 'normal'
+                        }}>
+                          {contact.lastMessage.messageType === 'image' ? (
+                            <Space>
+                              <PictureOutlined />
+                              <span>Hình ảnh</span>
+                            </Space>
+                          ) : contact.lastMessage.messageType === 'file' ? (
+                            <Space>
+                              <FileOutlined />
+                              <span>Tập tin: {contact.lastMessage.fileName || 'Tập tin'}</span>
+                            </Space>
+                          ) : (
+                            contact.lastMessage.content
+                          )}
+                        </div>
+                      )}
+                      <div>
+                        {contact.type === 'group'
+                          ? 'Nhóm trò chuyện'
+                          : (contact.status === 'offline' && contact.lastActive
+                            ? `Hoạt động ${new Date(contact.lastActive).toLocaleDateString('vi-VN')}`
+                            : contact.status === 'online'
+                              ? 'Đang hoạt động'
+                              : 'Đang bận')}
+                      </div>
+                    </>
                   }
                 />
               </List.Item>
@@ -1376,7 +1653,11 @@ const MessagesPage: React.FC = () => {
                     size="large"
                   />
                   <div>
-                    <Text strong style={{ fontSize: 16 }}>{selectedConversation.receivedName}</Text>
+                    {selectedConversation.type === 'group' ? (
+                      <Text strong style={{ fontSize: 16 }}>{selectedConversation.name}</Text>
+                    ) : (
+                      <Text strong style={{ fontSize: 16 }}>{selectedConversation.receivedName}</Text>
+                    )}
                     <div>
                       <Badge
                         status={selectedContact.status === 'online' ? 'success' : 'default'}
@@ -1429,9 +1710,26 @@ const MessagesPage: React.FC = () => {
                             gap: 16
                           }}>
                             {!isCurrentUser && (
-                              <Avatar
-                                icon={<UserOutlined />}
-                              />
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <Avatar
+                                  icon={<UserOutlined />}
+                                  src={msg.imageUrl}
+                                  size="large"
+                                />
+                                {selectedConversation?.type === 'group' && (
+                                  <div style={{ 
+                                    fontSize: '10px', 
+                                    marginTop: '4px', 
+                                    maxWidth: '60px',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    textAlign: 'center'
+                                  }}>
+                                    {msg.senderUsername?.split(' ').pop() || 'User'}
+                                  </div>
+                                )}
+                              </div>
                             )}
 
                             <div style={{
@@ -1443,6 +1741,17 @@ const MessagesPage: React.FC = () => {
                               display: 'inline-block',
                               textAlign: 'left'
                             }}>
+                              {/* Hiển thị tên người gửi trong nhóm chat */}
+                              {selectedConversation?.type === 'group' && !isCurrentUser && (
+                                <div style={{ 
+                                  fontWeight: 'bold', 
+                                  marginBottom: 4, 
+                                  color: isCurrentUser ? 'white' : '#1890ff'
+                                }}>
+                                  {msg.senderUsername || 'Người dùng'}
+                                </div>
+                              )}
+                              
                               {/* Show different content based on message type */}
                               {msg.messageType === 'image' && msg.imageUrl ? (
                                 <div style={{ marginBottom: '8px' }}>
