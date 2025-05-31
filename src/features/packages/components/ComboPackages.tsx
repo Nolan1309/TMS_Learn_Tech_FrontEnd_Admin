@@ -479,6 +479,13 @@ const ComboPackages: React.FC = () => {
       ),
       sorter: (a, b) => a.price - b.price,
     },
+    // {
+    //   title: 'Giá gốc',
+    //   dataIndex: 'originalPrice',
+    //   key: 'originalPrice',
+    //   width: 170,
+    //   render: (originalPrice, record) => formatCurrency(originalPrice),
+    // },
     {
       title: 'Lượt mua',
       dataIndex: 'salesCount',

@@ -44,6 +44,8 @@ interface Message {
   fileName?: string;    // Original file name
   fileSize?: number;    // File size in bytes
   fileType?: string;    // MIME type of the file
+  fromImage?: string;
+  receivedImage?: string;
 }
 
 interface Conversation {
@@ -1713,7 +1715,7 @@ const MessagesPage: React.FC = () => {
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                 <Avatar
                                   icon={<UserOutlined />}
-                                  src={msg.imageUrl}
+                                  src={msg.fromImage}
                                   size="large"
                                 />
                                 {selectedConversation?.type === 'group' && (
@@ -1756,7 +1758,7 @@ const MessagesPage: React.FC = () => {
                               {msg.messageType === 'image' && msg.imageUrl ? (
                                 <div style={{ marginBottom: '8px' }}>
                                   <Image
-                                    src={msg.imageUrl}
+                                    src={msg.fromImage}
                                     alt="Image"
                                     style={{ maxWidth: '100%', borderRadius: '6px' }}
                                     preview={{
@@ -1816,7 +1818,7 @@ const MessagesPage: React.FC = () => {
                               ) : isImageUrl(msg.content) ? (
                                 <div style={{ marginBottom: '8px' }}>
                                   <Image
-                                    src={msg.content}
+                                    src={msg.fromImage}
                                     alt="Image"
                                     style={{ maxWidth: '100%', borderRadius: '6px' }}
                                     preview={{

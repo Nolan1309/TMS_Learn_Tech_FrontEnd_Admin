@@ -148,39 +148,39 @@ const RewardAssignments: React.FC = () => {
   }, [currentTab, currentTimePeriod]);
 
   // Fetch assignments data
-  const fetchAssignments = async () => {
-    try {
-      setLoading(true);
-      let url = GET_REWARD_ASSIGNMENTS;
+  // const fetchAssignments = async () => {
+  //   try {
+  //     setLoading(true);
+  //     let url = GET_REWARD_ASSIGNMENTS;
       
-      // Add date filter for daily period
-      if (currentTimePeriod === 'DAILY') {
-        const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-        url += `${url.includes('?') ? '&' : '?'}date=${today}`;
-      }
+  //     // Add date filter for daily period
+  //     if (currentTimePeriod === 'DAILY') {
+  //       const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+  //       url += `${url.includes('?') ? '&' : '?'}date=${today}`;
+  //     }
       
-      const response = await axios.get(url);
-      let assignmentsData = response.data;
+  //     const response = await axios.get(url);
+  //     let assignmentsData = response.data;
       
-      // Filter data based on tab
-      if (currentTab === 'student') {
-        assignmentsData = assignmentsData.filter(
-          (assignment: RewardAssignment) => assignment.rankingType === 'STUDENT'
-        );
-      } else if (currentTab === 'instructor') {
-        assignmentsData = assignmentsData.filter(
-          (assignment: RewardAssignment) => assignment.rankingType === 'INSTRUCTOR'
-        );
-      }
+  //     // Filter data based on tab
+  //     if (currentTab === 'student') {
+  //       assignmentsData = assignmentsData.filter(
+  //         (assignment: RewardAssignment) => assignment.rankingType === 'STUDENT'
+  //       );
+  //     } else if (currentTab === 'instructor') {
+  //       assignmentsData = assignmentsData.filter(
+  //         (assignment: RewardAssignment) => assignment.rankingType === 'INSTRUCTOR'
+  //       );
+  //     }
       
-      setAssignments(assignmentsData);
-    } catch (error) {
-      console.error('Error fetching reward assignments:', error);
-      message.error('Không thể tải dữ liệu phần thưởng đã gán. Vui lòng thử lại sau.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  //     setAssignments(assignmentsData);
+  //   } catch (error) {
+  //     console.error('Error fetching reward assignments:', error);
+  //     message.error('Không thể tải dữ liệu phần thưởng đã gán. Vui lòng thử lại sau.');
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   // Handle search
   const handleSearch = (value: string) => {

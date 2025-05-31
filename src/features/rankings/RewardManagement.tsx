@@ -36,14 +36,17 @@ import type { ColumnsType } from 'antd/es/table';
 import { RangePickerProps } from 'antd/es/date-picker';
 import moment from 'moment';
 import RewardAssignments from './RewardAssignments';
-import axios from 'axios';
-import { 
-  POST_REWARD, 
-  PUT_REWARD, 
-  GET_REWARDS, 
-  GET_STUDENT_REWARDS, 
-  GET_INSTRUCTOR_REWARDS 
+
+import {
+  POST_REWARD,
+  PUT_REWARD,
+  GET_REWARDS,
+  GET_STUDENT_REWARDS,
+  GET_INSTRUCTOR_REWARDS
 } from '../../api/api';
+import { useNavigate } from 'react-router-dom';
+import useRefreshToken from '../../utils/useRefreshToken';
+import { authTokenLogin } from '../../utils';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
@@ -52,83 +55,34 @@ const { TabPane } = Tabs;
 const { TextArea } = Input;
 
 interface Reward {
-  id: string;
-  name: string;
-  description: string;
-  type: 'COURSE' | 'VOUCHER' | 'EXAM';
-  value: number;
-  rankingType: 'STUDENT' | 'INSTRUCTOR';
-  rankLevel: number;
-  periodType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
-  status: 'ACTIVE' | 'INACTIVE';
-  quantity: number;
+  id: number;
+  rewardName: string;
+  rewardValue: number;
+  rewardType: 'WEEKLY' | 'MONTHLY';
+  discountId?: number;
+  rankPosition: number;
   createdAt: string;
   updatedAt: string;
 }
 
-// Mock data for rewards
-const mockRewards: Reward[] = [
-  {
-    id: '1',
-    name: 'Khóa học Pro miễn phí',
-    description: 'Khóa học Pro miễn phí trong 1 tháng dành cho học viên đạt Top 1',
-    type: 'COURSE',
-    value: 500000,
-    rankingType: 'STUDENT',
-    rankLevel: 1,
-    periodType: 'MONTHLY',
-  
-    status: 'ACTIVE',
-    quantity: 5,
-    createdAt: '2023-06-01',
-    updatedAt: '2023-06-01'
-  },
-  {
-    id: '2',
-    name: 'Chứng chỉ thành tích xuất sắc',
-    description: 'Chứng chỉ thành tích xuất sắc dành cho giảng viên đạt Top 1',
-    type: 'EXAM',
-    value: 0,
-    rankingType: 'INSTRUCTOR',
-    rankLevel: 1,
-    periodType: 'MONTHLY',
-    status: 'ACTIVE',
-    quantity: 10,
-    createdAt: '2023-06-01',
-    updatedAt: '2023-06-01'
-  },
-  {
-    id: '3',
-    name: 'Mã giảm giá 50%',
-    description: 'Mã giảm giá 50% cho khóa học bất kỳ dành cho học viên đạt Top 6-10',
-    type: 'VOUCHER',
-    value: 200000,
-    rankingType: 'STUDENT',
-    rankLevel: 6,
-    periodType: 'WEEKLY',
-    status: 'ACTIVE',
-    quantity: 20,
-    createdAt: '2023-06-01',
-    updatedAt: '2023-06-01'
-  },
-  {
-    id: '4',
-    name: 'Cúp danh dự',
-    description: 'Cúp danh dự dành cho giảng viên xuất sắc nhất tháng',
-    type: 'COURSE',
-    value: 1000000,
-    rankingType: 'INSTRUCTOR',
-    rankLevel: 1,
-    periodType: 'MONTHLY',
-    status: 'ACTIVE',
-    quantity: 1,
-    createdAt: '2023-06-01',
-    updatedAt: '2023-06-01'
-  },
-];
+interface Discount {
+  id: string;
+  code: string;
+  title: string;
+  discountType: string;
+  description: string;
+  value: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  minOrderValue: number;
+  maxUsed: number;
+  usedCount: number;
+}
 
 const RewardManagement: React.FC = () => {
-  const [rewards, setRewards] = useState<Reward[]>(mockRewards);
+  const [rewards, setRewards] = useState<Reward[]>([]);
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [searchText, setSearchText] = useState<string>('');
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
@@ -137,6 +91,16 @@ const RewardManagement: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('student');
   const [activeTab, setActiveTab] = useState<string>('rewards');
   const [currentTimePeriod, setCurrentTimePeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('WEEKLY');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [totalRewards, setTotalRewards] = useState<number>(0);
+  const [filterType, setFilterType] = useState<'WEEKLY' | 'MONTHLY' | 'all' | undefined>(undefined);
+
+  const navigate = useNavigate();
+  const refresh = useRefreshToken();
+  const refreshToken = localStorage.getItem("refreshToken");
+
+
 
   // Filter options
   const rankLevelOptions = [
@@ -152,49 +116,90 @@ const RewardManagement: React.FC = () => {
     { label: 'Tuần', value: 'WEEKLY' },
     { label: 'Tháng', value: 'MONTHLY' }
   ];
-
   const rewardTypeOptions = [
-    { label: 'Khóa học', value: 'COURSE' },
-    { label: 'Voucher', value: 'VOUCHER' },
-    { label: 'Đề thi', value: 'EXAM' }
+    { label: 'Tuần', value: 'WEEKLY' },
+    { label: 'Tháng', value: 'MONTHLY' }
   ];
 
   // Load rewards data
   useEffect(() => {
     fetchRewards();
-  }, [currentTab, currentTimePeriod]);
+  }, [currentPage, pageSize, filterType]);
 
   // Fetch rewards data
   const fetchRewards = async () => {
     try {
       setLoading(true);
-      let response;
-      let url = '';
-      
-      // Base URL based on student/instructor tab
-      if (currentTab === 'student') {
-        url = GET_STUDENT_REWARDS;
-      } else if (currentTab === 'instructor') {
-        url = GET_INSTRUCTOR_REWARDS;
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+
+      // Build query params
+      const params = new URLSearchParams();
+      params.append('page', String(currentPage - 1)); // Backend uses 0-based page index
+      params.append('size', String(pageSize));
+
+      if (filterType && filterType !== 'all') {
+        params.append('rewardType', filterType);
+      }
+
+      const url = `${process.env.REACT_APP_SERVER_HOST}/api/rewards/type?${params.toString()}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const responseData = await response.json();
+      console.log('API Response:', responseData); // Debug log
+
+      if (responseData.status === 200 && responseData.data) {
+        setRewards(responseData.data.content || []);
+        setTotalRewards(responseData.data.totalElements || 0);
       } else {
-        url = GET_REWARDS;
+        throw new Error('Invalid response format');
       }
-      
-      // Add date filter for daily tab if using period type filter
-      if (currentTimePeriod === 'DAILY') {
-        const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-        url += `${url.includes('?') ? '&' : '?'}date=${today}`;
-      }
-      
-      response = await axios.get(url);
-      setRewards(response.data);
     } catch (error) {
       console.error('Error fetching rewards:', error);
       message.error('Không thể tải dữ liệu phần thưởng. Vui lòng thử lại sau.');
+      setRewards([]);
+      setTotalRewards(0);
     } finally {
       setLoading(false);
     }
   };
+
+  // Fetch discounts data
+  const fetchDiscounts = async () => {
+    try {
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+      setLoading(true);
+      const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/discounts/voucher-rewards`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // Include token in headers
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const data = await response.json();
+      setDiscounts(data.data);
+    } catch (error) {
+      console.error('Error fetching discounts:', error);
+      message.error('Không thể tải danh sách mã giảm giá');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDiscounts();
+  }, []);
 
   // Handle search
   const handleSearch = (value: string) => {
@@ -203,14 +208,12 @@ const RewardManagement: React.FC = () => {
 
   // Get filtered rewards
   const getFilteredRewards = () => {
-    const filtered = rewards.filter(reward => 
-      (searchText === '' || 
-        reward.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        reward.description.toLowerCase().includes(searchText.toLowerCase())) &&
-      reward.rankingType === (currentTab === 'student' ? 'STUDENT' : 'INSTRUCTOR')
+    if (!Array.isArray(rewards)) return [];
+
+    return rewards.filter(reward =>
+      !searchText ||
+      (reward?.rewardName?.toLowerCase()?.includes(searchText.toLowerCase()) ?? false)
     );
-    
-    return filtered;
   };
 
   // Handle reward creation/edit
@@ -231,51 +234,105 @@ const RewardManagement: React.FC = () => {
   };
 
   // Handle reward deletion
-  const handleDelete = (record: Reward) => {
-    setRewards(rewards.filter(item => item.id !== record.id));
-    message.success('Phần thưởng đã được xóa thành công!');
+  const handleDelete = async (record: Reward) => {
+    try {
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+
+      const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/rewards/${record.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const responseData = await response.json();
+      if (responseData.status === 200) {
+        message.success('Phần thưởng đã được xóa thành công!');
+        fetchRewards(); // Refresh the list after successful deletion
+      } else {
+        throw new Error(responseData.message || 'Failed to delete reward');
+      }
+    } catch (error) {
+      console.error('Error deleting reward:', error);
+      message.error('Có lỗi xảy ra khi xóa phần thưởng. Vui lòng thử lại sau.');
+    }
   };
 
   // Handle form submission
   const handleSubmit = async (values: any) => {
     try {
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+
       if (currentReward) {
         // Edit existing reward
-        await axios.put(`${PUT_REWARD(currentReward.id)}`, {
-          ...values,
-          rankingType: currentTab === 'student' ? 'STUDENT' : 'INSTRUCTOR',
-          updatedAt: new Date().toISOString().split('T')[0]
+        const formData = {
+          id: currentReward.id,
+          rewardName: values.rewardName,
+          rewardValue: values.rewardValue,
+          rewardType: values.rewardType,
+          discountId: values.discountId || null,
+          rankPosition: values.rankPosition
+        };
+
+        const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/rewards/${currentReward.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(formData),
         });
-        
-        // Update local state
-        const updatedRewards = rewards.map(item => 
-          item.id === currentReward.id ? { 
-            ...item, 
-            ...values,
-            rankingType: currentTab === 'student' ? 'STUDENT' : 'INSTRUCTOR',
-            updatedAt: new Date().toISOString().split('T')[0]
-          } : item
-        );
-        setRewards(updatedRewards);
-        message.success('Phần thưởng đã được cập nhật thành công!');
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const responseData = await response.json();
+        if (responseData.status === 200) {
+          message.success('Phần thưởng đã được cập nhật thành công!');
+          fetchRewards(); // Refresh the list
+        } else {
+          throw new Error(responseData.message || 'Failed to update reward');
+        }
       } else {
         // Create new reward
-        const newRewardData = {
-          ...values,
-          rankingType: currentTab === 'student' ? 'STUDENT' : 'INSTRUCTOR',
-          status: 'ACTIVE',
-          createdAt: new Date().toISOString().split('T')[0],
-          updatedAt: new Date().toISOString().split('T')[0]
+        const formData = {
+          rewardName: values.rewardName,
+          rewardValue: values.rewardValue,
+          rewardType: values.rewardType,
+          discountId: values.discountId || null,
+          rankPosition: values.rankPosition
         };
-        
-        const response = await axios.post(POST_REWARD, newRewardData);
-        
-        // Add new reward to local state
-        const newReward = response.data;
-        setRewards([...rewards, newReward]);
-        message.success('Phần thưởng mới đã được tạo thành công!');
+
+        const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/rewards`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(formData),
+        });
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const responseData = await response.json();
+        if (responseData.status === 200) {
+          message.success('Phần thưởng mới đã được tạo thành công!');
+          fetchRewards(); // Refresh the list
+        } else {
+          throw new Error(responseData.message || 'Failed to create reward');
+        }
       }
+
       setIsModalVisible(false);
+      form.resetFields();
     } catch (error) {
       console.error('Error saving reward:', error);
       message.error('Có lỗi xảy ra khi lưu phần thưởng. Vui lòng thử lại sau.');
@@ -293,15 +350,27 @@ const RewardManagement: React.FC = () => {
     fetchRewards();
   };
 
+  // Handle page change
+  const handlePageChange = (page: number, pageSize?: number) => {
+    setCurrentPage(page);
+    if (pageSize) {
+      setPageSize(pageSize);
+    }
+  };
+
+  // Handle filter type change
+  const handleFilterTypeChange = (value: 'WEEKLY' | 'MONTHLY' | 'all' | undefined) => {
+    setFilterType(value);
+    setCurrentPage(1); // Reset to first page on filter change
+  };
+
   // Render reward type tag
   const renderRewardTypeTag = (type: string) => {
     switch (type) {
-      case 'COURSE':
-        return <Tag color="blue">Khóa học</Tag>;
-      case 'VOUCHER':
-        return <Tag color="green">Voucher</Tag>;
-      case 'EXAM':
-        return <Tag color="purple">Đề thi</Tag>;
+      case 'WEEKLY':
+        return <Tag color="blue">Tuần</Tag>;
+      case 'MONTHLY':
+        return <Tag color="green">Tháng</Tag>;
       default:
         return <Tag>Không xác định</Tag>;
     }
@@ -343,9 +412,9 @@ const RewardManagement: React.FC = () => {
   const studentColumns: ColumnsType<Reward> = [
     {
       title: 'Tên phần thưởng',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text, record) => (
+      dataIndex: 'rewardName',
+      key: 'rewardName',
+      render: (text) => (
         <Space>
           <GiftOutlined />
           <span>{text}</span>
@@ -354,48 +423,45 @@ const RewardManagement: React.FC = () => {
     },
     {
       title: 'Loại',
-      dataIndex: 'type',
-      key: 'type',
+      dataIndex: 'rewardType',
+      key: 'rewardType',
       width: 120,
       render: type => renderRewardTypeTag(type),
     },
     {
-      title: 'Cấp độ xếp hạng',
-      dataIndex: 'rankLevel',
-      key: 'rankLevel',
+      title: 'Vị trí xếp hạng',
+      dataIndex: 'rankPosition',
+      key: 'rankPosition',
       width: 150,
-      render: level => renderRankLevelTag(level),
-    },
-    {
-      title: 'Thời gian',
-      dataIndex: 'periodType',
-      key: 'periodType',
-      width: 120,
-      render: period => renderPeriodType(period),
+      render: position => <Tag color="blue">Top {position}</Tag>,
     },
     {
       title: 'Giá trị (VNĐ)',
-      dataIndex: 'value',
-      key: 'value',
+      dataIndex: 'rewardValue',
+      key: 'rewardValue',
       width: 150,
       render: value => new Intl.NumberFormat('vi-VN').format(value),
     },
     {
-      title: 'Số lượng',
-      dataIndex: 'quantity',
-      key: 'quantity',
-      width: 100,
+      title: 'Mã giảm giá',
+      dataIndex: 'discountId',
+      key: 'discountId',
+      width: 150,
+      // render: (discountId) => {
+      //   const discount = discounts.find(d => d.id === discountId?.toString());
+      //   return discount ? (
+      //     <Tooltip title={`${discount.value}% - ${discount.description}`}>
+      //       <Tag color="purple">{discount.code} - {discount.title}</Tag>
+      //     </Tooltip>
+      //   ) : '-';
+      // },
     },
     {
-      title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
-      width: 120,
-      render: (status: string) => (
-        <Tag color={status === 'ACTIVE' ? 'green' : 'red'}>
-          {status === 'ACTIVE' ? 'Hoạt động' : 'Tạm ngưng'}
-        </Tag>
-      ),
+      title: 'Ngày tạo',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 150,
+      render: date => moment(date).format('DD/MM/YYYY'),
     },
     {
       title: 'Thao tác',
@@ -404,10 +470,10 @@ const RewardManagement: React.FC = () => {
       render: (_, record) => (
         <Space>
           <Tooltip title="Chỉnh sửa">
-            <Button 
-              icon={<EditOutlined />} 
-              size="small" 
-              onClick={() => handleEdit(record)} 
+            <Button
+              icon={<EditOutlined />}
+              size="small"
+              onClick={() => handleEdit(record)}
             />
           </Tooltip>
           <Popconfirm
@@ -417,9 +483,9 @@ const RewardManagement: React.FC = () => {
             cancelText="Không"
           >
             <Tooltip title="Xóa">
-              <Button 
-                icon={<DeleteOutlined />} 
-                size="small" 
+              <Button
+                icon={<DeleteOutlined />}
+                size="small"
                 danger
               />
             </Tooltip>
@@ -442,15 +508,15 @@ const RewardManagement: React.FC = () => {
           Phần thưởng được phân loại theo cấp độ xếp hạng và thời gian xếp hạng (ngày, tuần, tháng).
         </div>
       </div>
-      
+
       <Tabs defaultActiveKey="rewards" onChange={setActiveTab}>
-        <TabPane 
-          tab={<span><GiftOutlined /> Danh sách phần thưởng</span>} 
+        <TabPane
+          tab={<span><GiftOutlined /> Danh sách phần thưởng</span>}
           key="rewards"
         >
           <Tabs defaultActiveKey="student" onChange={handleTabChange}>
-            <TabPane 
-              tab={<span><TrophyOutlined /> Phần thưởng cho học viên</span>} 
+            <TabPane
+              tab={<span><TrophyOutlined /> Phần thưởng cho học viên</span>}
               key="student"
             >
               <div className="reward-header">
@@ -461,40 +527,48 @@ const RewardManagement: React.FC = () => {
                     style={{ width: 300 }}
                     allowClear
                   />
-                  <Select 
-                    defaultValue="WEEKLY" 
-                    style={{ width: 120 }} 
-                    onChange={(value) => handleTimePeriodChange(value as 'DAILY' | 'WEEKLY' | 'MONTHLY')}
+                  <Select
+                    value={filterType}
+                    style={{ width: 120 }}
+                    onChange={setFilterType}
+                    allowClear
+                    placeholder="Loại thời gian"
                   >
-                    <Option value="DAILY">Ngày</Option>
+                    <Option value="all">Tất cả</Option>
                     <Option value="WEEKLY">Tuần</Option>
                     <Option value="MONTHLY">Tháng</Option>
                   </Select>
-                  <Button 
-                    type="primary" 
-                    icon={<PlusOutlined />} 
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
                     onClick={handleAddOrEdit}
                   >
                     Thêm phần thưởng mới
                   </Button>
                 </Space>
               </div>
-              
+
               <Table
                 columns={studentColumns}
                 dataSource={getFilteredRewards()}
                 loading={loading}
                 rowKey="id"
                 pagination={{
-                  pageSize: 10,
+                  current: currentPage,
+                  pageSize: pageSize,
+                  total: totalRewards,
                   showSizeChanger: true,
                   showTotal: (total) => `Tổng cộng ${total} phần thưởng`,
+                  onChange: (page, size) => {
+                    setCurrentPage(page);
+                    setPageSize(size);
+                  }
                 }}
               />
             </TabPane>
-            
-            <TabPane 
-              tab={<span><TrophyOutlined /> Phần thưởng cho giảng viên</span>} 
+
+            <TabPane
+              tab={<span><TrophyOutlined /> Phần thưởng cho giảng viên</span>}
               key="instructor"
             >
               <div className="reward-header">
@@ -505,32 +579,35 @@ const RewardManagement: React.FC = () => {
                     style={{ width: 300 }}
                     allowClear
                   />
-                  <Select 
-                    defaultValue="WEEKLY" 
-                    style={{ width: 120 }} 
+                  <Select
+                    defaultValue="WEEKLY"
+                    style={{ width: 120 }}
                     onChange={(value) => handleTimePeriodChange(value as 'DAILY' | 'WEEKLY' | 'MONTHLY')}
                   >
                     <Option value="DAILY">Ngày</Option>
                     <Option value="WEEKLY">Tuần</Option>
                     <Option value="MONTHLY">Tháng</Option>
                   </Select>
-                  <Button 
-                    type="primary" 
-                    icon={<PlusOutlined />} 
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
                     onClick={handleAddOrEdit}
                   >
                     Thêm phần thưởng mới
                   </Button>
                 </Space>
               </div>
-              
+
               <Table
                 columns={instructorColumns}
                 dataSource={getFilteredRewards()}
                 loading={loading}
                 rowKey="id"
                 pagination={{
-                  pageSize: 10,
+                  current: currentPage,
+                  pageSize: pageSize,
+                  total: totalRewards,
+                  onChange: handlePageChange,
                   showSizeChanger: true,
                   showTotal: (total) => `Tổng cộng ${total} phần thưởng`,
                 }}
@@ -538,15 +615,15 @@ const RewardManagement: React.FC = () => {
             </TabPane>
           </Tabs>
         </TabPane>
-        
-        <TabPane 
-          tab={<span><AuditOutlined /> Phần thưởng đã gán</span>} 
+
+        <TabPane
+          tab={<span><AuditOutlined /> Phần thưởng đã gán</span>}
           key="assignments"
         >
           <RewardAssignments />
         </TabPane>
       </Tabs>
-      
+
       {/* Add/Edit Form Modal */}
       <Modal
         title={currentReward ? "Chỉnh sửa phần thưởng" : "Thêm phần thưởng mới"}
@@ -560,117 +637,80 @@ const RewardManagement: React.FC = () => {
           layout="vertical"
           onFinish={handleSubmit}
           initialValues={{
-            type: 'COURSE',
-            rankLevel: 1,
-            periodType: 'MONTHLY',
-            status: 'ACTIVE',
-            quantity: 1,
-            value: 0
+            rewardType: 'WEEKLY',
+            rankPosition: 1,
+            rewardValue: 0
           }}
         >
           <Row gutter={16}>
             <Col span={24}>
               <Form.Item
-                name="name"
+                name="rewardName"
                 label="Tên phần thưởng"
                 rules={[{ required: true, message: 'Vui lòng nhập tên phần thưởng' }]}
               >
-                <Input placeholder="Nhập tên phần thưởng" />
+                <Input placeholder="Ví dụ: Top 1 tuần" />
               </Form.Item>
             </Col>
-            
-            <Col span={24}>
-              <Form.Item
-                name="description"
-                label="Mô tả"
-                rules={[{ required: true, message: 'Vui lòng nhập mô tả phần thưởng' }]}
-              >
-                <TextArea rows={4} placeholder="Nhập mô tả phần thưởng" />
-              </Form.Item>
-            </Col>
-            
+
             <Col span={12}>
               <Form.Item
-                name="type"
-                label="Loại phần thưởng"
-                rules={[{ required: true, message: 'Vui lòng chọn loại phần thưởng' }]}
+                name="rewardType"
+                label="Loại thời gian xếp hạng"
+                rules={[{ required: true, message: 'Vui lòng chọn loại thời gian' }]}
               >
                 <Select>
-                  {rewardTypeOptions.map(option => (
-                    <Option key={option.value} value={option.value}>{option.label}</Option>
+                  <Option value="WEEKLY">Tuần</Option>
+                  <Option value="MONTHLY">Tháng</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+
+            <Col span={12}>
+              <Form.Item
+                name="discountId"
+                label="Mã giảm giá"
+              >
+                <Select allowClear placeholder="Chọn mã giảm giá (không bắt buộc)">
+                  {discounts.map(discount => (
+                    <Option key={discount.id} value={discount.id}>
+                      {discount.code} - {discount.title} - Giảm {discount.value}%
+                    </Option>
                   ))}
                 </Select>
               </Form.Item>
             </Col>
-            
+
             <Col span={12}>
               <Form.Item
-                name="value"
-                label="Giá trị (VNĐ)"
+                name="rewardValue"
+                label="Giá trị phần thưởng (VNĐ)"
                 rules={[{ required: true, message: 'Vui lòng nhập giá trị phần thưởng' }]}
               >
                 <InputNumber
                   style={{ width: '100%' }}
                   formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                  placeholder="Nhập giá trị phần thưởng"
+                  placeholder="Ví dụ: 500000"
                 />
               </Form.Item>
             </Col>
-            
+
             <Col span={12}>
               <Form.Item
-                name="rankLevel"
-                label="Cấp độ xếp hạng"
-                rules={[{ required: true, message: 'Vui lòng chọn cấp độ xếp hạng' }]}
+                name="rankPosition"
+                label="Vị trí xếp hạng"
+                rules={[{ required: true, message: 'Vui lòng nhập vị trí xếp hạng' }]}
               >
-                <Select>
-                  {rankLevelOptions.map(option => (
-                    <Option key={option.value} value={option.value}>{option.label}</Option>
-                  ))}
-                </Select>
+                <InputNumber
+                  min={1}
+                  style={{ width: '100%' }}
+                  placeholder="Nhập số thứ tự (vd: 1 cho Top 1)"
+                />
               </Form.Item>
             </Col>
-            
-            <Col span={12}>
-              <Form.Item
-                name="periodType"
-                label="Thời gian xếp hạng"
-                rules={[{ required: true, message: 'Vui lòng chọn thời gian xếp hạng' }]}
-              >
-                <Select>
-                  {periodTypeOptions.map(option => (
-                    <Option key={option.value} value={option.value}>{option.label}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Col>
-            
-            <Col span={12}>
-              <Form.Item
-                name="quantity"
-                label="Số lượng"
-                rules={[{ required: true, message: 'Vui lòng nhập số lượng phần thưởng' }]}
-              >
-                <InputNumber min={1} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            
-            <Col span={12}>
-              <Form.Item
-                name="status"
-                label="Trạng thái"
-                rules={[{ required: true, message: 'Vui lòng chọn trạng thái' }]}
-              >
-                <Select>
-                  <Option value="ACTIVE">Hoạt động</Option>
-                  <Option value="INACTIVE">Tạm ngưng</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-           
           </Row>
-          
+
           <Form.Item style={{ marginTop: 16, textAlign: 'right' }}>
             <Button onClick={() => setIsModalVisible(false)} style={{ marginRight: 8 }}>
               Hủy
@@ -685,4 +725,4 @@ const RewardManagement: React.FC = () => {
   );
 };
 
-export default RewardManagement; 
+export default RewardManagement;

@@ -19,6 +19,7 @@ export interface JwtPayload {
   isUser: boolean;
   isHuitStudent: boolean;
   sub: string;
+  AccountId: number;
 }
 
 const Login: React.FC = () => {

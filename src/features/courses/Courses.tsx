@@ -67,6 +67,10 @@ export interface Lesson {
   topic: string;
   course_id: number;
   chapterId: number;
+  isRequired: boolean;
+  learningTip: string;
+  keyPoint: string;
+  overviewLesson: string;
 }
 
 export interface TestExam {

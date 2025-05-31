@@ -717,7 +717,7 @@ const CommentsPage: React.FC = () => {
               >
                 <Option value="ALL">Tất cả nguồn</Option>
                 <Option value="COURSE">Khóa học</Option>
-
+                <Option value="ARTICLE">Bài viết</Option>
               </Select>
             </Space>
           </Space>

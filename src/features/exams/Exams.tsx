@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Typography, Table, Button, Space, Card, Input, Tag, Dropdown,
-  Menu, Select, DatePicker, Modal, Form, Tabs, Tooltip,
-  Divider, Badge, Popconfirm, message, Switch, Row, Col, Checkbox, Descriptions, Alert
+  Typography, Table, Button, Space, Card, Input, Tag, Select,
+  DatePicker, Modal, Form, Tabs, Tooltip, Divider, Switch,
+  message, Row, Col, Badge, Popconfirm, Alert, Checkbox, Descriptions
 } from 'antd';
 import {
-  PlusOutlined, DeleteOutlined, EditOutlined, EyeOutlined, ImportOutlined, ExportOutlined
+  PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import useRefreshToken from '../../utils/useRefreshToken';
@@ -924,8 +925,8 @@ const ExamsPage: React.FC = () => {
       ),
     },
     {
-      title: 'Hành động',
-      key: 'action',
+      title: 'Thao tác',
+      key: 'actions',
       render: (_, record) => (
         <Space>
           <Tooltip title="Xem chi tiết">
@@ -933,6 +934,9 @@ const ExamsPage: React.FC = () => {
           </Tooltip>
           <Tooltip title="Chỉnh sửa">
             <Button icon={<EditOutlined />} shape="circle" onClick={() => handleEditExam(record.id)} />
+          </Tooltip>
+          <Tooltip title="Tải về DOCX">
+            <Button icon={<DownloadOutlined />} shape="circle" onClick={() => handleExportDocx(record.id)} />
           </Tooltip>
           <Tooltip title={record.assigned ? "Thêm câu hỏi" : "Bài kiểm tra chưa được phân công"}>
             <Button
@@ -1389,6 +1393,52 @@ const ExamsPage: React.FC = () => {
     }
 
     return true;
+  };
+
+  const handleExportDocx = async (examId: string) => {
+    try {
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+      if (!token) return;
+
+      const response = await fetch(
+        `${process.env.REACT_APP_SERVER_HOST}/api/tests/export-docx/${examId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        // Get the file as a blob
+        const blob = await response.blob();
+        // Create a local URL for the blob
+        const url = window.URL.createObjectURL(blob);
+        // Create a temporary anchor element
+        const a = document.createElement('a');
+        a.href = url;
+        // Get filename from Content-Disposition or use default
+        const contentDisposition = response.headers.get('Content-Disposition');
+        const filename = contentDisposition ?
+          contentDisposition.split('filename=')[1].replace(/"/g, '') :
+          'exam.docx';
+        a.download = filename;
+        // Trigger download
+        document.body.appendChild(a);
+        a.click();
+        // Cleanup
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        message.success("Tải xuống file DOCX thành công!");
+      } else {
+        const errorText = await response.text();
+        message.error(`Có lỗi xảy ra khi tải xuống file DOCX: ${errorText}`);
+      }
+    } catch (error) {
+      console.error("Error exporting to DOCX:", error);
+      message.error("Có lỗi xảy ra khi tải xuống file DOCX");
+    }
   };
 
   return (
@@ -2264,4 +2314,4 @@ const ExamsPage: React.FC = () => {
   );
 };
 
-export default ExamsPage; 
+export default ExamsPage;

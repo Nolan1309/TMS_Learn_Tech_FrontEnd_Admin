@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Table, Card, Button, Space, Tag, Input, Typography, Popconfirm,
   message, Modal, Form, Select, DatePicker, Tabs, Row, Col, Upload,
-  Divider, Statistic, Tooltip
+  Divider, Statistic, Tooltip, InputNumber
 } from 'antd';
 import { Pie } from '@ant-design/plots';
 import {
@@ -113,6 +113,7 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [activationCodes, setActivationCodes] = useState<any[]>([]);
   const [pageCount, setPageCount] = useState<number>(0);
+  const [totalCodes, setTotalCodes] = useState<number>(0);
   const [search, setSearch] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(0);
 
@@ -421,6 +422,7 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
       const data = await response.json();
       setActivationCodes(data.content); // content là danh sách mã khóa học
       setPageCount(data.totalPages); // totalPages là tổng số trang
+      setTotalCodes(data.totalElements); // totalElements là tổng số mã khóa học
 
     } catch (error) {
       console.error('Có lỗi khi tải dữ liệu:', error);
@@ -439,14 +441,21 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
 
   const handleGenerateCodeOk = async () => {
     try {
+      const bodyValues = await exportForm.validateFields();
       const token = await authTokenLogin(refreshToken, refresh, navigate);
-      
-      const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/course-codes/generate/${courseId}`, {
+
+      const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/course-codes/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
-        }
+        },
+        body: JSON.stringify({
+          quantity: bodyValues.quantity,
+          courseId: parseInt(courseId),
+          accountId: bodyValues.accountId || 2,
+          expiryDays: bodyValues.expiryDays || 5
+        }),
       });
 
       if (!response.ok) {
@@ -464,7 +473,7 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
   const setCodeStatus = async (id: string, active: boolean) => {
     try {
       const token = await authTokenLogin(refreshToken, refresh, navigate);
-      
+
       const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/course-codes/${id}/status`, {
         method: 'PUT',
         headers: {
@@ -489,7 +498,7 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
   const deleteCode = async (id: string) => {
     try {
       const token = await authTokenLogin(refreshToken, refresh, navigate);
-      
+
       const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/course-codes/${id}`, {
         method: 'DELETE',
         headers: {
@@ -612,7 +621,7 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
       document.body.appendChild(a);
       a.click();
       a.remove();
-      
+
       setIsExportModalVisible(false);
       message.success('Đã xuất danh sách học viên thành công');
     } catch (error) {
@@ -736,7 +745,7 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
       key: 'action',
       render: (_: any, record: StudentCourseDataDTO) => (
         <Space size="small">
-           <Tooltip title="Cập nhật thông tin">
+          <Tooltip title="Cập nhật thông tin">
             <Button
               type="primary"
               size="small"
@@ -867,7 +876,7 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
           <Col span={8}>
             <Card>
               <Row>
-               
+
                 <Col span={12}>
                   <Statistic
                     title="Đã dự đoán"
@@ -1151,10 +1160,10 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
         <Dragger
           name="file"
           multiple={false}
-          showUploadList={{showRemoveIcon: true}}
+          showUploadList={{ showRemoveIcon: true }}
           beforeUpload={(file) => {
-            const isExcel = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
-                            file.type === 'application/vnd.ms-excel';
+            const isExcel = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+              file.type === 'application/vnd.ms-excel';
             if (!isExcel) {
               message.error('Chỉ hỗ trợ tải lên file Excel!');
               return Upload.LIST_IGNORE;
@@ -1172,14 +1181,14 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
           </p>
         </Dragger>
         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between' }}>
-          <Button 
-            type="link" 
+          <Button
+            type="link"
             icon={<InboxOutlined />}
           >
             Tải về mẫu nhập liệu
           </Button>
-          <Button 
-            type="primary" 
+          <Button
+            type="primary"
             icon={<UploadOutlined />}
             disabled={!selectedFile}
             onClick={() => {
@@ -1240,24 +1249,53 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
         <div style={{ marginBottom: 16 }}>
           <Text>Mã khóa học dùng để học viên đăng ký tham gia khóa học. Chỉ có một mã khóa học được kích hoạt tại một thời điểm.</Text>
         </div>
-        
+
+        <Form form={exportForm} layout="vertical" style={{ marginBottom: 16 }}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="quantity"
+                label="Số lượng mã cần tạo"
+                rules={[
+                  { required: true, message: 'Vui lòng nhập số lượng mã cần tạo' },
+                  { type: 'number', min: 1, message: 'Số lượng phải lớn hơn 0' }
+                ]}
+              >
+                <InputNumber style={{ width: '100%' }} min={1} placeholder="Nhập số lượng mã" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="expiryDays"
+                label="Số ngày hiệu lực"
+                rules={[
+                  { required: true, message: 'Vui lòng nhập số ngày hiệu lực' },
+                  { type: 'number', min: 1, message: 'Số ngày phải lớn hơn 0' }
+                ]}
+              >
+                <InputNumber style={{ width: '100%' }} min={1} placeholder="Nhập số ngày hiệu lực" />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+
         <div style={{ marginBottom: 16 }}>
           <Search
             placeholder="Tìm kiếm mã khóa học"
             onSearch={(value) => {
               setSearch(value);
-              setCurrentPage(0); // Reset to first page when searching
+              setCurrentPage(0);
               fetchData(0);
             }}
             style={{ width: 300 }}
           />
         </div>
-        
+
         <Table
           dataSource={activationCodes}
           rowKey="id"
           pagination={{
-            total: pageCount * 10,
+            total: totalCodes,
             pageSize: 10,
             onChange: (page) => fetchData(page - 1),
             showSizeChanger: false,
@@ -1278,46 +1316,46 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
               render: (date: string) => moment(date).format('DD/MM/YYYY'),
             },
             {
+              title: 'Hạn sử dụng',
+              dataIndex: 'expiryDate',
+              key: 'expiryDate',
+              render: (date: string) => moment(date).format('DD/MM/YYYY'),
+            },
+            {
               title: 'Trạng thái',
-              dataIndex: 'active',
-              key: 'active',
-              render: (active: boolean) => (
-                <Tag color={active ? 'green' : 'red'}>
-                  {active ? 'Đang kích hoạt' : 'Vô hiệu'}
-                </Tag>
-              ),
+              dataIndex: 'status',
+              key: 'status',
+              render: (active: boolean, record: any) => {
+                if (active) {
+                  return <Tag color="green">Đã sử dụng</Tag>;
+                }
+
+                const expiryDate = moment(record.expiryDate);
+                const now = moment();
+
+                if (expiryDate.isBefore(now)) {
+                  return <Tag color="gray">Đã hết hạn</Tag>;
+                }
+
+                return <Tag color="red">Chưa sử dụng</Tag>;
+              },
             },
             {
               title: 'Hành động',
               key: 'action',
               render: (_: any, record: { id: string, active: boolean }) => (
                 <Space size="small">
-                  {!record.active ? (
-                    <Button 
-                      type="primary" 
-                      size="small"
-                      onClick={() => setCodeStatus(record.id, true)}
-                    >
-                      Kích hoạt
-                    </Button>
-                  ) : (
-                    <Button
-                      danger
-                      size="small"
-                      onClick={() => setCodeStatus(record.id, false)}
-                    >
-                      Vô hiệu hóa
-                    </Button>
-                  )}
+
+
                   <Popconfirm
                     title="Bạn có chắc chắn muốn xóa mã này?"
                     onConfirm={() => deleteCode(record.id)}
                     okText="Có"
                     cancelText="Không"
                   >
-                    <Button 
-                      danger 
-                      size="small" 
+                    <Button
+                      danger
+                      size="small"
                       icon={<DeleteOutlined />}
                     />
                   </Popconfirm>
@@ -1334,4 +1372,4 @@ const CourseHUITStudents: React.FC<CourseHUITStudentsProps> = ({ courseId }) => 
   );
 };
 
-export default CourseHUITStudents; 
+export default CourseHUITStudents;
