@@ -33,17 +33,20 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import moment from 'moment';
 import axios from 'axios';
-import { 
-  GET_REWARD_ASSIGNMENTS, 
+import {
+  GET_REWARD_ASSIGNMENTS,
   PUT_REWARD_ASSIGNMENT_STATUS
 } from '../../api/api';
+import { authTokenLogin } from '../../utils';
+import { useNavigate } from 'react-router-dom';
+import useRefreshToken from '../../utils/useRefreshToken';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
 interface RewardAssignment {
-  id: string;
+  rewardHistoryId: string;
   rewardId: string;
   rewardName: string;
   accountId: string;
@@ -54,12 +57,8 @@ interface RewardAssignment {
   rankingPeriodType: 'DAILY' | 'WEEKLY' | 'MONTHLY';
   rankingPosition?: number;
   assignedAt: string;
-  status: 'ASSIGNED' | 'CLAIMED' | 'DELIVERED';
+  status: boolean;
   claimedAt?: string;
-  deliveredAt?: string;
-  deliveryAddress?: string;
-  contactPhone?: string;
-  contactEmail?: string;
 }
 
 // Mock data for reward assignments
@@ -141,46 +140,61 @@ const RewardAssignments: React.FC = () => {
   const [form] = Form.useForm();
   const [currentTab, setCurrentTab] = useState<string>('all');
   const [currentTimePeriod, setCurrentTimePeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('WEEKLY');
-
+  const navigate = useNavigate();
+  const refresh = useRefreshToken();
+  const refreshToken = localStorage.getItem("refreshToken");
   // Load assignments data
   useEffect(() => {
     fetchAssignments();
   }, [currentTab, currentTimePeriod]);
 
   // Fetch assignments data
-  // const fetchAssignments = async () => {
-  //   try {
-  //     setLoading(true);
-  //     let url = GET_REWARD_ASSIGNMENTS;
-      
-  //     // Add date filter for daily period
-  //     if (currentTimePeriod === 'DAILY') {
-  //       const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-  //       url += `${url.includes('?') ? '&' : '?'}date=${today}`;
-  //     }
-      
-  //     const response = await axios.get(url);
-  //     let assignmentsData = response.data;
-      
-  //     // Filter data based on tab
-  //     if (currentTab === 'student') {
-  //       assignmentsData = assignmentsData.filter(
-  //         (assignment: RewardAssignment) => assignment.rankingType === 'STUDENT'
-  //       );
-  //     } else if (currentTab === 'instructor') {
-  //       assignmentsData = assignmentsData.filter(
-  //         (assignment: RewardAssignment) => assignment.rankingType === 'INSTRUCTOR'
-  //       );
-  //     }
-      
-  //     setAssignments(assignmentsData);
-  //   } catch (error) {
-  //     console.error('Error fetching reward assignments:', error);
-  //     message.error('Không thể tải dữ liệu phần thưởng đã gán. Vui lòng thử lại sau.');
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
+  const fetchAssignments = async () => {
+    try {
+      setLoading(true);
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+
+      // Build query params
+      const params = new URLSearchParams();
+
+      // Add date filter based on period type
+      const now = moment();
+      const baseUrl = `${process.env.REACT_APP_SERVER_HOST}/api/reward-history/assignments?periodType=${currentTimePeriod}`;
+   
+      const response = await fetch(baseUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      let assignmentsData = data.data || data; // Handle both {data: [...]} and direct array response
+
+      // Filter data based on tab
+      if (currentTab === 'student') {
+        assignmentsData = assignmentsData.filter(
+          (assignment: RewardAssignment) => assignment.rankingType === 'STUDENT'
+        );
+      } else if (currentTab === 'instructor') {
+        assignmentsData = assignmentsData.filter(
+          (assignment: RewardAssignment) => assignment.rankingType === 'INSTRUCTOR'
+        );
+      }
+
+      setAssignments(assignmentsData);
+    } catch (error) {
+      console.error('Error fetching reward assignments:', error);
+      message.error('Không thể tải dữ liệu phần thưởng đã gán. Vui lòng thử lại sau.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Handle search
   const handleSearch = (value: string) => {
@@ -189,18 +203,16 @@ const RewardAssignments: React.FC = () => {
 
   // Get filtered assignments
   const getFilteredAssignments = () => {
-    let filtered = assignments.filter(assignment => 
-      (searchText === '' || 
-        assignment.accountName.toLowerCase().includes(searchText.toLowerCase()) ||
-        assignment.rewardName.toLowerCase().includes(searchText.toLowerCase()))
+    let filtered = assignments.filter(assignment =>
+    (searchText === '' ||
+      assignment.accountName.toLowerCase().includes(searchText.toLowerCase()) ||
+      assignment.rewardName.toLowerCase().includes(searchText.toLowerCase()))
     );
-    
     if (currentTab === 'student') {
       filtered = filtered.filter(assignment => assignment.rankingType === 'STUDENT');
     } else if (currentTab === 'instructor') {
       filtered = filtered.filter(assignment => assignment.rankingType === 'INSTRUCTOR');
     }
-    
     return filtered;
   };
 
@@ -214,22 +226,22 @@ const RewardAssignments: React.FC = () => {
   const handleStatusUpdate = async (record: RewardAssignment, newStatus: 'ASSIGNED' | 'CLAIMED' | 'DELIVERED') => {
     try {
       await axios.put(PUT_REWARD_ASSIGNMENT_STATUS(record.id, newStatus));
-      
+
       const updatedAssignments = assignments.map(item => {
         if (item.id === record.id) {
           const updated = { ...item, status: newStatus };
-          
+
           if (newStatus === 'CLAIMED') {
             updated.claimedAt = new Date().toISOString().split('T')[0];
           } else if (newStatus === 'DELIVERED') {
             updated.deliveredAt = new Date().toISOString().split('T')[0];
           }
-          
+
           return updated;
         }
         return item;
       });
-      
+
       setAssignments(updatedAssignments);
       message.success('Cập nhật trạng thái thành công!');
     } catch (error) {
@@ -297,10 +309,10 @@ const RewardAssignments: React.FC = () => {
       key: 'accountName',
       render: (text, record) => (
         <div className="reward-recipient">
-          <Avatar 
-            className="reward-recipient-avatar" 
-            icon={<UserOutlined />} 
-            src={record.accountAvatar} 
+          <Avatar
+            className="reward-recipient-avatar"
+            icon={<UserOutlined />}
+            src={record.accountAvatar}
           />
           <span>{text}</span>
         </div>
@@ -365,15 +377,15 @@ const RewardAssignments: React.FC = () => {
       width: 250,
       render: (_, record) => (
         <Space>
-          <Button 
-            size="small" 
+          <Button
+            size="small"
             onClick={() => handleViewDetails(record)}
           >
             Chi tiết
           </Button>
-          
+
           {record.status === 'ASSIGNED' && (
-            <Button 
+            <Button
               size="small"
               type="primary"
               onClick={() => handleStatusUpdate(record, 'CLAIMED')}
@@ -381,9 +393,9 @@ const RewardAssignments: React.FC = () => {
               Đánh dấu đã nhận
             </Button>
           )}
-          
+
           {record.status === 'CLAIMED' && (
-            <Button 
+            <Button
               size="small"
               type="primary"
               onClick={() => handleStatusUpdate(record, 'DELIVERED')}
@@ -403,22 +415,22 @@ const RewardAssignments: React.FC = () => {
           Quản lý việc gán và theo dõi phần thưởng cho học viên và giảng viên theo thứ hạng.
         </Paragraph>
       </div>
-      
+
       <Tabs defaultActiveKey="all" onChange={handleTabChange}>
-        <Tabs.TabPane 
-          tab={<span>Tất cả phần thưởng</span>} 
+        <Tabs.TabPane
+          tab={<span>Tất cả phần thưởng</span>}
           key="all"
         />
-        <Tabs.TabPane 
-          tab={<span>Phần thưởng học viên</span>} 
+        <Tabs.TabPane
+          tab={<span>Phần thưởng học viên</span>}
           key="student"
         />
-        <Tabs.TabPane 
-          tab={<span>Phần thưởng giảng viên</span>} 
+        <Tabs.TabPane
+          tab={<span>Phần thưởng giảng viên</span>}
           key="instructor"
         />
       </Tabs>
-      
+
       <div className="reward-header">
         <Space style={{ marginBottom: 16 }}>
           <Input.Search
@@ -427,9 +439,9 @@ const RewardAssignments: React.FC = () => {
             style={{ width: 400 }}
             allowClear
           />
-          <Select 
-            defaultValue="WEEKLY" 
-            style={{ width: 120 }} 
+          <Select
+            defaultValue="WEEKLY"
+            style={{ width: 120 }}
             onChange={(value) => handleTimePeriodChange(value as 'DAILY' | 'WEEKLY' | 'MONTHLY')}
           >
             <Option value="DAILY">Ngày</Option>
@@ -440,7 +452,7 @@ const RewardAssignments: React.FC = () => {
           <Button icon={<SearchOutlined />}>Tìm kiếm</Button>
         </Space>
       </div>
-      
+
       <Table
         className="reward-assignment-table"
         columns={columns}
@@ -453,7 +465,7 @@ const RewardAssignments: React.FC = () => {
           showTotal: (total) => `Tổng cộng ${total} phần thưởng đã gán`,
         }}
       />
-      
+
       {/* Assignment Details Modal */}
       <Modal
         title="Chi tiết phần thưởng đã gán"
@@ -471,10 +483,10 @@ const RewardAssignments: React.FC = () => {
             <Row gutter={[16, 16]}>
               <Col span={24}>
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-                  <Avatar 
-                    size={64} 
-                    icon={<UserOutlined />} 
-                    src={selectedAssignment.accountAvatar} 
+                  <Avatar
+                    size={64}
+                    icon={<UserOutlined />}
+                    src={selectedAssignment.accountAvatar}
                   />
                   <div style={{ marginLeft: 16 }}>
                     <Title level={4}>{selectedAssignment.accountName}</Title>
@@ -489,7 +501,7 @@ const RewardAssignments: React.FC = () => {
                   </div>
                 </div>
               </Col>
-              
+
               <Col span={24}>
                 <Title level={5}>Thông tin phần thưởng</Title>
                 <Card size="small">
@@ -504,7 +516,7 @@ const RewardAssignments: React.FC = () => {
                   )}
                 </Card>
               </Col>
-              
+
               <Col span={24}>
                 <Title level={5}>Thông tin liên hệ</Title>
                 <Card size="small">
@@ -528,11 +540,11 @@ const RewardAssignments: React.FC = () => {
                   )}
                 </Card>
               </Col>
-              
+
               <Col span={24}>
                 <Space style={{ marginTop: 16 }}>
                   {selectedAssignment.status === 'ASSIGNED' && (
-                    <Button 
+                    <Button
                       type="primary"
                       onClick={() => {
                         handleStatusUpdate(selectedAssignment, 'CLAIMED');
@@ -542,9 +554,9 @@ const RewardAssignments: React.FC = () => {
                       Đánh dấu đã nhận
                     </Button>
                   )}
-                  
+
                   {selectedAssignment.status === 'CLAIMED' && (
-                    <Button 
+                    <Button
                       type="primary"
                       onClick={() => {
                         handleStatusUpdate(selectedAssignment, 'DELIVERED');
@@ -564,4 +576,4 @@ const RewardAssignments: React.FC = () => {
   );
 };
 
-export default RewardAssignments; 
+export default RewardAssignments;

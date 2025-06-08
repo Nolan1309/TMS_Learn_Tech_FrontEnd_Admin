@@ -1239,60 +1239,6 @@ const ExamsPage: React.FC = () => {
     }
   };
 
-  // Define columns for existing questions
-  const existingQuestionColumns = [
-    {
-      title: 'Câu hỏi',
-      dataIndex: 'content',
-      key: 'content',
-      render: (text: string) => (
-        <div dangerouslySetInnerHTML={{ __html: text }} />
-      )
-    },
-    {
-      title: 'Loại',
-      dataIndex: 'type',
-      key: 'type',
-      width: 120,
-      render: (type: string) => {
-        const typeInfo = QUESTION_TYPES.find(t => t.value === type) ||
-          { value: type, label: type, color: 'default' };
-        return <Tag color={typeInfo.color}>{typeInfo.label}</Tag>;
-      }
-    },
-    {
-      title: 'Độ khó',
-      dataIndex: 'level',
-      key: 'level',
-      width: 100,
-      render: (level: string) => {
-        const levelText = level === '1' ? 'Dễ' : level === '2' ? 'TB' : level === '3' ? 'Khó' : level;
-        const colorMap: { [key: string]: string } = {
-          '1': 'success',
-          '2': 'warning',
-          '3': 'error'
-        };
-        return <Tag color={colorMap[level] || 'default'}>{levelText}</Tag>;
-      }
-    },
-    {
-      title: 'Hành động',
-      key: 'action',
-      width: 100,
-      render: (_: any, record: any) => (
-        <Popconfirm
-          title="Bạn có chắc chắn muốn xóa câu hỏi này khỏi bài kiểm tra?"
-          onConfirm={() => handleRemoveQuestion(record.id)}
-          okText="Có"
-          cancelText="Không"
-        >
-          <Button danger icon={<DeleteOutlined />} size="small">
-            Xóa
-          </Button>
-        </Popconfirm>
-      )
-    }
-  ];
 
   // Add back the fetchLessonDetail function
   const fetchLessonDetail = async (exam: Exam) => {

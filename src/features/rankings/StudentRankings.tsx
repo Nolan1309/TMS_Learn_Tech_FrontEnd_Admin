@@ -83,74 +83,88 @@ const StudentRankings: React.FC = () => {
   const refreshToken = localStorage.getItem("refreshToken");
   // Pagination state
   const [pagination, setPagination] = useState<PaginationParams>({
-    page: 0, 
+    page: 0,
     size: 10,
     total: 0
   });
-  
+
   // Filter states
   const [filterPosition, setFilterPosition] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<boolean | null>(null);
-  
+
   // Construct the filter parameters for API request
   const getFilterParams = () => {
     const params = new URLSearchParams();
-    
+
     // Pagination params
     params.append('page', pagination.page.toString());
     params.append('size', pagination.size.toString());
-    
+
     // Fixed filter by period type
     params.append('periodType', currentTimeframe);
-    
+
     // Optional filters
     if (filterPosition !== null) {
       params.append('ranking', filterPosition.toString());
     }
-    
+
     if (filterStatus !== null) {
       params.append('status', filterStatus.toString());
     }
-    
+
     if (searchText) {
       params.append('accountName', searchText);
     }
-    
+
     if (dateRange && dateRange[0] && dateRange[1]) {
       params.append('startDate', dateRange[0].format('YYYY-MM-DD'));
       params.append('endDate', dateRange[1].format('YYYY-MM-DD'));
     }
-    
+
     return params;
   };
-  
+
   // Fetch rankings data
   const fetchRankings = async () => {
     setLoading(true);
     try {
       const token = await authTokenLogin(refreshToken, refresh, navigate);
       const params = getFilterParams();
-      const response = await fetch(`${API_URL}/rankings?${params.toString()}`, {
+
+      // Add week filter for weekly rankings
+      if (currentTimeframe === 'WEEKLY') {
+        const now = moment();
+        const startOfWeek = now.clone().startOf('week');
+        const endOfWeek = now.clone().endOf('week');
+        params.append('startDate', startOfWeek.format('YYYY-MM-DD'));
+        params.append('endDate', endOfWeek.format('YYYY-MM-DD'));
+      }
+
+      const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/rankings?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (!response.ok) {
         throw new Error(`Failed to fetch rankings: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
-      // Assuming the API returns { content: [...], totalElements: number, size: number, number: number }
-      setRankings(data.data.content || []);
-      setPagination({
-        page: data.data.number || 0,
-        size: data.data.size || 10,
-        total: data.data.totalElements || 0
-      });
-      
+
+      if (data.status === 200 && data.data) {
+        // Map response data to StudentRanking interface
+        setRankings(data.data.content || []);
+        setPagination({
+          page: data.data.number || 0,
+          size: data.data.size || 10,
+          total: data.data.totalElements || 0
+        });
+      } else {
+        throw new Error('Invalid response format');
+      }
+
     } catch (error) {
       console.error(`Error fetching rankings:`, error);
       message.error('Không thể tải dữ liệu xếp hạng');
@@ -158,7 +172,7 @@ const StudentRankings: React.FC = () => {
       setLoading(false);
     }
   };
-  
+
   // Load data when component mounts or filters change
   useEffect(() => {
     fetchRankings();
@@ -170,35 +184,35 @@ const StudentRankings: React.FC = () => {
     filterStatus,
     dateRange
   ]);
-  
+
   // Handle search with debounce
   useEffect(() => {
     const handler = setTimeout(() => {
       fetchRankings();
     }, 500);
-    
+
     return () => {
       clearTimeout(handler);
     };
   }, [searchText]);
-  
+
   // Reset filters
   const resetFilters = () => {
     setSearchText('');
     setFilterPosition(null);
     setFilterStatus(null);
     setDateRange(null);
-    
+
     // Reset pagination to first page
     setPagination({
       ...pagination,
       page: 0
     });
-    
+
     // Fetch data with cleared filters
     fetchRankings();
   };
-  
+
   // Handle table pagination changes
   const handleTableChange = (newPagination, filters, sorter) => {
     setPagination({
@@ -207,13 +221,13 @@ const StudentRankings: React.FC = () => {
       total: pagination.total
     });
   };
-  
+
   // Show student details
   const showStudentDetails = (student: StudentRanking) => {
     setCurrentStudent(student);
     setIsDetailModalVisible(true);
   };
-  
+
   // Date range change handler
   const handleDateRangeChange: RangePickerProps['onChange'] = (dates) => {
     if (dates) {
@@ -222,7 +236,7 @@ const StudentRankings: React.FC = () => {
       setDateRange(null);
     }
   };
-  
+
   // Get rating badge based on pointRanking
   const getRatingBadge = (points: number) => {
     if (points >= 90) {
@@ -237,7 +251,7 @@ const StudentRankings: React.FC = () => {
       return <Badge count={<TrophyOutlined style={{ color: '#cd7f32' }} />} />;
     }
   };
-  
+
   // Get rating tag based on pointRanking
   const getRatingTag = (points: number) => {
     if (points >= 90) {
@@ -252,23 +266,25 @@ const StudentRankings: React.FC = () => {
       return <Tag color="#cd7f32">Đồng</Tag>;
     }
   };
-  
-  // Format period value
-  const formatPeriodValue = (student: StudentRanking) => {
-    // switch (student.periodType) {
-    //   case 'DAILY':
-    //     return `Ngày ${new Date(student.createdAt).toLocaleDateString('vi-VN')}`;
-    //   case 'WEEKLY':
-    //     const [year, week] = student.createdAt.split('-W');
-    //     return `Tuần ${week}, ${year}`;
-    //   case 'MONTHLY':
-    //     const [yearM, month] = student.createdAt.split('-');
-    //     return `Tháng ${month}/${yearM}`;
-    //   default:
-      return moment(student.createdAt).format('DD/MM/YYYY');
-    // }
+
+  // Format period value display
+  const formatPeriodValue = (record: StudentRanking) => {
+    const date = moment(record.createdAt);
+
+    switch (record.periodType) {
+      case 'DAILY':
+        return date.format('DD/MM/YYYY');
+      case 'WEEKLY':
+        const startOfWeek = date.clone().startOf('week');
+        const endOfWeek = date.clone().endOf('week');
+        return `Tuần ${date.week()} (${startOfWeek.format('DD/MM')} - ${endOfWeek.format('DD/MM/YYYY')})`;
+      case 'MONTHLY':
+        return date.format('MM/YYYY');
+      default:
+        return date.format('DD/MM/YYYY');
+    }
   };
-  
+
   // Table columns
   const columns: ColumnsType<StudentRanking> = [
     {
@@ -336,16 +352,16 @@ const StudentRankings: React.FC = () => {
       render: (_, record) => (
         <Space>
           <Tooltip title="Xem chi tiết">
-            <Button 
-              icon={<EyeOutlined />} 
-              size="small" 
-              onClick={() => showStudentDetails(record)} 
+            <Button
+              icon={<EyeOutlined />}
+              size="small"
+              onClick={() => showStudentDetails(record)}
             />
           </Tooltip>
           <Tooltip title="Biểu đồ thống kê">
-            <Button 
-              icon={<BarChartOutlined />} 
-              size="small" 
+            <Button
+              icon={<BarChartOutlined />}
+              size="small"
             />
           </Tooltip>
         </Space>
@@ -379,13 +395,25 @@ const StudentRankings: React.FC = () => {
 
   // Get current rankings statistics
   const getRankingsStats = () => {
+    // Filter current week rankings if on weekly view
+    let filteredRankings = rankings;
+    if (currentTimeframe === 'WEEKLY') {
+      const now = moment();
+      const startOfWeek = now.clone().startOf('week');
+      const endOfWeek = now.clone().endOf('week');
+      filteredRankings = rankings.filter(r => {
+        const recordDate = moment(r.createdAt);
+        return recordDate.isBetween(startOfWeek, endOfWeek, 'day', '[]');
+      });
+    }
+
     return {
       total: pagination.total,
-      diamond: rankings.filter(i => i.totalPoints >= 90).length,
-      platinum: rankings.filter(i => i.totalPoints >= 80 && i.totalPoints < 90).length,
-      gold: rankings.filter(i => i.totalPoints >= 70 && i.totalPoints < 80).length,
-      completed: rankings.filter(i => i.status).length,
-      incomplete: rankings.filter(i => !i.status).length
+      diamond: filteredRankings.filter(i => i.totalPoints >= 90).length,
+      platinum: filteredRankings.filter(i => i.totalPoints >= 80 && i.totalPoints < 90).length,
+      gold: filteredRankings.filter(i => i.totalPoints >= 70 && i.totalPoints < 80).length,
+      completed: filteredRankings.filter(i => i.status).length,
+      incomplete: filteredRankings.filter(i => !i.status).length
     };
   };
 
@@ -401,28 +429,28 @@ const StudentRankings: React.FC = () => {
           Bảng xếp hạng được cập nhật theo ngày, tuần và tháng. Cấp độ xếp hạng: Đồng, Bạc, Vàng, Bạch kim, Kim cương.
         </div>
       </div>
-      
+
       <Tabs defaultActiveKey="DAILY" onChange={handleTimeframeChange}>
-        <TabPane 
-          tab={<span><CalendarOutlined /> Xếp hạng ngày</span>} 
+        <TabPane
+          tab={<span><CalendarOutlined /> Xếp hạng ngày</span>}
           key="DAILY"
         >
           <Title level={4}>{getTimeframeTitle()}</Title>
         </TabPane>
-        <TabPane 
-          tab={<span><CalendarOutlined /> Xếp hạng tuần</span>} 
+        <TabPane
+          tab={<span><CalendarOutlined /> Xếp hạng tuần</span>}
           key="WEEKLY"
         >
           <Title level={4}>{getTimeframeTitle()}</Title>
         </TabPane>
-        <TabPane 
-          tab={<span><CalendarOutlined /> Xếp hạng tháng</span>} 
+        <TabPane
+          tab={<span><CalendarOutlined /> Xếp hạng tháng</span>}
           key="MONTHLY"
         >
           <Title level={4}>{getTimeframeTitle()}</Title>
         </TabPane>
       </Tabs>
-      
+
       <div className="ranking-filters">
         <Input
           placeholder="Tìm kiếm theo tên học viên"
@@ -432,7 +460,7 @@ const StudentRankings: React.FC = () => {
           style={{ width: 300 }}
           allowClear
         />
-        
+
         <Select
           placeholder="Xếp hạng"
           style={{ width: 150 }}
@@ -444,7 +472,7 @@ const StudentRankings: React.FC = () => {
             <Option key={pos} value={pos}>Top {pos}</Option>
           ))}
         </Select>
-        
+
         <Select
           placeholder="Trạng thái"
           style={{ width: 150 }}
@@ -455,24 +483,24 @@ const StudentRankings: React.FC = () => {
           <Option value={true}>Đã hoàn thành</Option>
           <Option value={false}>Chưa hoàn thành</Option>
         </Select>
-        
+
         <RangePicker onChange={handleDateRangeChange} />
-        
-        <Button 
-          icon={<ReloadOutlined />} 
+
+        <Button
+          icon={<ReloadOutlined />}
           onClick={resetFilters}
         >
           Đặt lại
         </Button>
-        
-        <Button 
-          type="primary" 
+
+        <Button
+          type="primary"
           icon={<ExportOutlined />}
         >
           Xuất báo cáo
         </Button>
       </div>
-      
+
       <div className="ranking-stats">
         <div className="ranking-stat-card">
           <Text>Tổng số học viên</Text>
@@ -491,7 +519,7 @@ const StudentRankings: React.FC = () => {
           <div className="ranking-stat-value">{stats.completed}</div>
         </div>
       </div>
-      
+
       <Table
         className="ranking-table"
         columns={columns}
@@ -508,7 +536,7 @@ const StudentRankings: React.FC = () => {
         }}
         onChange={handleTableChange}
       />
-      
+
       {/* Detail Modal */}
       <Modal
         title="Chi tiết học viên"
@@ -538,27 +566,27 @@ const StudentRankings: React.FC = () => {
                     </div>
                   </Col>
                   <Col>
-                    <Statistic 
-                      title="Điểm xếp hạng" 
-                      value={currentStudent.totalPoints} 
-                      suffix="" 
+                    <Statistic
+                      title="Điểm xếp hạng"
+                      value={currentStudent.totalPoints}
+                      suffix=""
                     />
                   </Col>
                 </Row>
               </Card>
             </Col>
-            
+
             <Col span={12}>
               <Card title="Số liệu thống kê">
                 <p><strong>Cập nhật lần cuối:</strong> {new Date(currentStudent.updatedAt).toLocaleDateString('vi-VN')}</p>
                 <p><strong>Kiểu thống kê:</strong> {
                   currentStudent.periodType === 'DAILY' ? 'Hàng ngày' :
-                  currentStudent.periodType === 'WEEKLY' ? 'Hàng tuần' : 'Hàng tháng'
+                    currentStudent.periodType === 'WEEKLY' ? 'Hàng tuần' : 'Hàng tháng'
                 }</p>
                 <p><strong>Thời gian áp dụng:</strong> {formatPeriodValue(currentStudent)}</p>
               </Card>
             </Col>
-            
+
             <Col span={12}>
               <Card title="Hiệu suất">
                 <div className="ranking-progress">
@@ -568,20 +596,20 @@ const StudentRankings: React.FC = () => {
                   </div>
                   <Progress percent={currentStudent.totalPoints} status="active" />
                 </div>
-                
+
                 <div className="ranking-progress">
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Text>Trạng thái</Text>
                     <Text>{currentStudent.status ? 'Đã hoàn thành' : 'Chưa hoàn thành'}</Text>
                   </div>
-                  <Progress 
-                    percent={currentStudent.status ? 100 : 0} 
-                    status={currentStudent.status ? "success" : "exception"} 
+                  <Progress
+                    percent={currentStudent.status ? 100 : 0}
+                    status={currentStudent.status ? "success" : "exception"}
                   />
                 </div>
               </Card>
             </Col>
-            
+
             <Col span={24}>
               <Card title="Tiêu chí xếp hạng">
                 <p>Hệ thống tính điểm dựa trên các tiêu chí sau:</p>
@@ -605,4 +633,4 @@ const StudentRankings: React.FC = () => {
   );
 };
 
-export default StudentRankings; 
+export default StudentRankings;

@@ -1780,10 +1780,7 @@ const MockExamsPage: React.FC = () => {
               <Form.Item
                 name="point"
                 label="Điểm cộng"
-                rules={[
-                  { required: true, message: 'Vui lòng nhập điểm cộng!' },
-                  { type: 'number', min: 0, message: 'Điểm cộng không được âm!' }
-                ]}
+
               >
                 <Input type="number" placeholder="Nhập điểm cộng" />
               </Form.Item>

@@ -49,7 +49,7 @@ export const PUT_REWARD = (id: string) => `${API_BASE_URL}/api/rewards/${id}`;
 export const DELETE_REWARD = (id: string) => `${API_BASE_URL}/api/rewards/${id}`;
 
 // Reward Assignments endpoints
-export const GET_REWARD_ASSIGNMENTS = `${API_BASE_URL}/api/reward-assignments`;
+export const GET_REWARD_ASSIGNMENTS = `${API_BASE_URL}/api/reward-history/assignments`;
 export const GET_REWARD_ASSIGNMENT_BY_ID = (id: string) => `${API_BASE_URL}/api/reward-assignments/${id}`;
 export const POST_REWARD_ASSIGNMENT = `${API_BASE_URL}/api/reward-assignments`;
 export const PUT_REWARD_ASSIGNMENT = (id: string) => `${API_BASE_URL}/api/reward-assignments/${id}`;

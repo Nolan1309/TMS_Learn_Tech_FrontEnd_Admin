@@ -66,7 +66,7 @@ export const ADMIN_UPDATE_QUESTION = `${process.env.REACT_APP_SERVER_HOST}/api/q
 export const ADMIN_EXPORT_EXCEL = `${process.env.REACT_APP_SERVER_HOST}/api/questions/export-excel`;
 export const ADMIN_EXPORT_DOCX = `${process.env.REACT_APP_SERVER_HOST}/api/questions/export-docx`;
 
-export const ADMIN_DELETE_CHOOSE_QUESTION = `${process.env.REACT_APP_SERVER_HOST}/api/questions/delete-choose`;
+export const ADMIN_DELETE_CHOOSE_QUESTION = `${process.env.REACT_APP_SERVER_HOST}/api/questions/batch`;
 export const ADMIN_EXPORT_QUESTION_DOCX = `${process.env.REACT_APP_SERVER_HOST}/api/questions/export/docx-list`;
 export const ADMIN_UPLOAD_DOCX = `${process.env.REACT_APP_SERVER_HOST}/api/questions/upload-docx`;
 
@@ -99,7 +99,8 @@ const QuestionBankPage: React.FC = () => {
 
   // Watch for form field changes
   const questionType = Form.useWatch('type', form);
-
+  const authData = localStorage.getItem('authData') ? JSON.parse(localStorage.getItem('authData') || '{}') : null;
+  const accountId = authData ? authData.accountId : 2; // Default to 2 if no auth data
   // Fetch courses from API
   const fetchCourseList = async () => {
     try {
@@ -180,7 +181,7 @@ const QuestionBankPage: React.FC = () => {
       const params = new URLSearchParams({
         topic: "",
         ...(filterCourse && { courseId: filterCourse }),
-        accountId: "2", 
+        accountId: "2",
         ...(typeFilter && { type: typeFilter }),
         ...(levelFilter && { level: levelFilter }),
         ...(searchText && { content: searchText }),
@@ -942,13 +943,13 @@ const QuestionBankPage: React.FC = () => {
 
   const handleFileChange = (info: any) => {
     console.log("File change event:", info);
-    
+
     // Handle file list changes
     if (info.fileList && info.fileList.length > 0) {
       // Get the last file (most recent)
       const lastFile = info.fileList[info.fileList.length - 1];
       console.log("Last file in list:", lastFile);
-      
+
       // Check if we have the file object
       if (lastFile.originFileObj) {
         console.log("File selected:", lastFile.originFileObj.name);
@@ -983,7 +984,7 @@ const QuestionBankPage: React.FC = () => {
 
   const handleUpload = async () => {
     console.log("Upload file:", uploadFile);
-    
+
     if (!uploadFile) {
       setUploadError("Vui lòng chọn một tệp DOCX.");
       return;
@@ -1005,7 +1006,7 @@ const QuestionBankPage: React.FC = () => {
     formData.append("file", uploadFile);
     formData.append("courseId", selectedCourse);
     formData.append("dialogType", selectedType);
-    formData.append("accountId", "2"); // Mặc định là người dùng hiện tại
+    formData.append("accountId", "2");
 
     try {
       setLoading(true);
@@ -1052,7 +1053,7 @@ const QuestionBankPage: React.FC = () => {
       if (selectedQuestions.length === 0) {
         return;
       }
-      
+
       const token = await authTokenLogin(refreshToken, refresh, navigate);
 
       const response = await fetch(
@@ -1168,8 +1169,8 @@ const QuestionBankPage: React.FC = () => {
         a.href = url;
         // Get filename from Content-Disposition or use default
         const contentDisposition = response.headers.get('Content-Disposition');
-        const filename = contentDisposition ? 
-          contentDisposition.split('filename=')[1].replace(/"/g, '') : 
+        const filename = contentDisposition ?
+          contentDisposition.split('filename=')[1].replace(/"/g, '') :
           'questions.docx';
         a.download = filename;
         // Trigger download
@@ -1197,7 +1198,7 @@ const QuestionBankPage: React.FC = () => {
       }
 
       const token = await authTokenLogin(refreshToken, refresh, navigate);
-      
+
       const response = await fetch(
         ADMIN_EXPORT_QUESTION_DOCX,
         {
@@ -1273,28 +1274,28 @@ const QuestionBankPage: React.FC = () => {
             </Select>
           </Space>
           <Space>
-            <Dropdown 
+            <Dropdown
               overlay={
                 <Menu>
-                  <Menu.Item 
-                    key="1" 
-                    icon={<FileExcelOutlined />} 
+                  <Menu.Item
+                    key="1"
+                    icon={<FileExcelOutlined />}
                     onClick={handleExportExcel}
                   >
                     Xuất Excel
                   </Menu.Item>
-                
-                  <Menu.Item 
-                    key="2" 
-                    icon={<FileWordOutlined />} 
+
+                  <Menu.Item
+                    key="2"
+                    icon={<FileWordOutlined />}
                     onClick={handleExportSelectedQuestionsDocx}
                     disabled={selectedQuestions.length === 0}
                   >
                     Xuất DOCX
                   </Menu.Item>
-                  <Menu.Item 
-                    key="3" 
-                    icon={<UploadOutlined />} 
+                  <Menu.Item
+                    key="3"
+                    icon={<UploadOutlined />}
                     onClick={handleUploadModalOpen}
                   >
                     Thêm từ file
@@ -1318,7 +1319,7 @@ const QuestionBankPage: React.FC = () => {
         </div>
 
         <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center' }}>
-        
+
           <Space>
 
             <Popconfirm
@@ -1343,7 +1344,7 @@ const QuestionBankPage: React.FC = () => {
             >
               Bỏ chọn
             </Button>
-            
+
           </Space>
         </div>
 
@@ -1367,7 +1368,7 @@ const QuestionBankPage: React.FC = () => {
           total: totalQuestionsCount,
           onChange: handlePageChange,
           showSizeChanger: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
+          pageSizeOptions: ['10', '20', '50', '100', '500', '1000', '2000'],
           showTotal: (total) => `Tổng cộng ${total} câu hỏi`
         }}
         scroll={{ x: 1200 }}
