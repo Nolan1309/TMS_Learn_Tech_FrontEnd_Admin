@@ -678,11 +678,34 @@ const DocumentsPage: React.FC = () => {
       title: 'Ngày cập nhật',
       dataIndex: 'updatedAt',
       key: 'updatedAt',
+      render: (date: string) => <Typography.Text type="secondary">
+        {new Date(date).toLocaleString('vi-VN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        })}
+      </Typography.Text>,
+      sorter: (a: Document, b: Document) => a.updatedAt.localeCompare(b.updatedAt),
     },
     {
       title: 'Ngày tạo',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      render: (date: string) => <Typography.Text type="secondary">
+        {new Date(date).toLocaleString('vi-VN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        })}
+      </Typography.Text>,
       sorter: (a: Document, b: Document) => a.createdAt.localeCompare(b.createdAt),
     },
     {
@@ -690,7 +713,7 @@ const DocumentsPage: React.FC = () => {
       dataIndex: 'size',
       key: 'size',
     },
-  
+
     {
       title: 'Lượt xem',
       dataIndex: 'view',
@@ -918,8 +941,26 @@ const DocumentsPage: React.FC = () => {
               <p><strong>Tên tài liệu:</strong> {viewingDocument.title}</p>
               <p><strong>Danh mục:</strong> {viewingDocument.categoryName}</p>
               <p><strong>Định dạng:</strong> {viewingDocument.format}</p>
-              <p><strong>Ngày cập nhật:</strong> {viewingDocument.updatedAt}</p>
-              <p><strong>Ngày tạo:</strong> {viewingDocument.createdAt}</p>
+              <p><strong>Ngày cập nhật:</strong>  {new Date(viewingDocument.updatedAt).toLocaleString('vi-VN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              })}</p>
+              <p><strong>Ngày tạo:</strong>
+                {new Date(viewingDocument.createdAt).toLocaleString('vi-VN', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false
+                })}
+              </p>
               <p><strong>Kích thước:</strong> {viewingDocument.size}</p>
               <p><strong>Lượt xem:</strong> {viewingDocument.view}</p>
               <p><strong>Lượt tải:</strong> {viewingDocument.downloads}</p>

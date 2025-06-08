@@ -35,6 +35,28 @@ export const POST_COURSE = `${API_BASE_URL}/courses`;
 export const PUT_COURSE = (id: string) => `${API_BASE_URL}/courses/${id}`;
 export const DELETE_COURSE = (id: string) => `${API_BASE_URL}/courses/${id}`;
 
+// Rankings endpoints
+export const GET_STUDENT_RANKINGS = `${API_BASE_URL}/rankings/students`;
+export const GET_INSTRUCTOR_RANKINGS = `${API_BASE_URL}/rankings/instructors`;
+
+// Ranking Rewards endpoints
+export const GET_REWARDS = `${API_BASE_URL}/api/rewards`;
+export const GET_STUDENT_REWARDS = `${API_BASE_URL}/api/rewards?type=student`;
+export const GET_INSTRUCTOR_REWARDS = `${API_BASE_URL}/api/rewards?type=instructor`;
+export const GET_REWARD_BY_ID = (id: string) => `${API_BASE_URL}/api/rewards/${id}`;
+export const POST_REWARD = `${API_BASE_URL}/api/rewards`;
+export const PUT_REWARD = (id: string) => `${API_BASE_URL}/api/rewards/${id}`;
+export const DELETE_REWARD = (id: string) => `${API_BASE_URL}/api/rewards/${id}`;
+
+// Reward Assignments endpoints
+export const GET_REWARD_ASSIGNMENTS = `${API_BASE_URL}/api/reward-history/assignments`;
+export const GET_REWARD_ASSIGNMENT_BY_ID = (id: string) => `${API_BASE_URL}/api/reward-assignments/${id}`;
+export const POST_REWARD_ASSIGNMENT = `${API_BASE_URL}/api/reward-assignments`;
+export const PUT_REWARD_ASSIGNMENT = (id: string) => `${API_BASE_URL}/api/reward-assignments/${id}`;
+export const DELETE_REWARD_ASSIGNMENT = (id: string) => `${API_BASE_URL}/api/reward-assignments/${id}`;
+export const PUT_REWARD_ASSIGNMENT_STATUS = (id: string, status: string) => 
+  `${API_BASE_URL}/api/reward-assignments/${id}/status/${status}`;
+
 // Posts endpoints
 export const GET_POSTS = `${API_BASE_URL}/posts`;
 export const GET_POST_BY_ID = (id: string) => `${API_BASE_URL}/posts/${id}`;

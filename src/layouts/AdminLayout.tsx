@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Layout,
@@ -30,11 +30,14 @@ const MainContent: React.FC<{
   const location = useLocation();
   const navigate = useNavigate();
 
+
   const pathSnippets = location.pathname.split('/').filter((i) => i);
+
   const breadcrumbNameMap: Record<string, string> = {
     '/': 'Dashboard',
     '/documents': 'Quản lý tài liệu',
     '/courses': 'Quản lý khóa học',
+    '/packages': 'Quản lý gói',
     '/question-bank': 'Ngân hàng câu hỏi',
     '/exams': 'Quản lý bài kiểm tra',
     '/results': 'Quản lý kết quả học tập',
@@ -56,6 +59,14 @@ const MainContent: React.FC<{
     '/evaluations': 'Quản lý đánh giá',
     '/rankings': 'Quản lý xếp hạng',
   };
+
+  const handleLogout = () => {
+    // const username = localStorage.getItem("username");
+    localStorage.removeItem("username");
+    localStorage.removeItem("authToken");
+    navigate("/dang-nhap");
+  };
+
 
   const extraBreadcrumbItems = pathSnippets.map((_, index) => {
     const url = `/${pathSnippets.slice(0, index + 1).join('/')}`;
@@ -80,12 +91,12 @@ const MainContent: React.FC<{
     {
       key: 'logout',
       label: 'Đăng xuất',
-      onClick: () => {
-        // Xử lý đăng xuất
-        navigate('/login');
-      },
+      onClick: handleLogout,
     },
   ];
+
+
+
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -120,6 +131,10 @@ const MainContent: React.FC<{
                 {
                   key: 'courses',
                   label: <Link to="/courses">Quản lý khóa học</Link>,
+                },
+                {
+                  key: 'packages',
+                  label: <Link to="/packages">Quản lý gói</Link>,
                 },
                 {
                   key: 'question-bank',

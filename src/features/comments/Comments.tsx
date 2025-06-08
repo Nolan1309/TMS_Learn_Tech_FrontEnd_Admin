@@ -29,12 +29,12 @@ interface CommentProps {
   children?: React.ReactNode;
 }
 
-const Comment: React.FC<CommentProps> = ({ 
-  author, 
-  avatar, 
-  content, 
-  datetime, 
-  children 
+const Comment: React.FC<CommentProps> = ({
+  author,
+  avatar,
+  content,
+  datetime,
+  children
 }) => {
   return (
     <div className="ant-comment">
@@ -86,7 +86,7 @@ const CommentsPage: React.FC = () => {
   const [totalPages, setTotalPages] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
-  
+
   // Filter states
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [targetTypeFilter, setTargetTypeFilter] = useState<string>('');
@@ -97,30 +97,30 @@ const CommentsPage: React.FC = () => {
   const refreshComments = async () => {
     // Reset to page 1
     setCurrentPage(1);
-    
+
     // Fetch comments directly to refresh totalElements and pagination info
     try {
       setLoading(true);
       const params = new URLSearchParams();
       params.append('page', '0'); // Reset to first page (index 0)
       params.append('size', pageSize.toString());
-      
+
       if (searchText) {
         params.append('content', searchText);
       }
-      
+
       if (statusFilter && statusFilter !== 'ALL') {
         params.append('status', statusFilter);
       }
-      
+
       if (targetTypeFilter && targetTypeFilter !== 'ALL') {
         params.append('targetType', targetTypeFilter);
       }
-      
+
       if (activeTab !== 'ALL') {
         params.append('status', activeTab);
       }
-      
+
       const token = await authTokenLogin(refreshToken, refresh, navigate);
       const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/comments?${params.toString()}`, {
         headers: {
@@ -128,7 +128,7 @@ const CommentsPage: React.FC = () => {
         }
       });
       const data = await response.json();
-      
+
       if (data.status === 200) {
         const { totalElements, totalPages, size, content } = data.data;
         setComments(content);
@@ -155,23 +155,23 @@ const CommentsPage: React.FC = () => {
         const params = new URLSearchParams();
         params.append('page', (currentPage - 1).toString());
         params.append('size', pageSize.toString());
-        
+
         if (searchText) {
           params.append('content', searchText);
         }
-        
+
         if (statusFilter && statusFilter !== 'ALL') {
           params.append('status', statusFilter);
         }
-        
+
         if (targetTypeFilter && targetTypeFilter !== 'ALL') {
           params.append('targetType', targetTypeFilter);
         }
-        
+
         if (activeTab !== 'ALL') {
           params.append('status', activeTab);
         }
-        
+
         const token = await authTokenLogin(refreshToken, refresh, navigate);
         const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/comments?${params.toString()}`, {
           headers: {
@@ -179,7 +179,7 @@ const CommentsPage: React.FC = () => {
           }
         });
         const data = await response.json();
-        
+
         if (data.status === 200) {
           const { totalElements, totalPages, size, content } = data.data;
           setComments(content);
@@ -252,9 +252,9 @@ const CommentsPage: React.FC = () => {
       try {
         const replyData = {
           content: values.content,
-          adminId: authData?.id || '', 
+          adminId: authData?.id || '',
         };
-        
+
         const token = await authTokenLogin(refreshToken, refresh, navigate);
         const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/comments/reply/${currentComment?.id}`, {
           method: 'POST',
@@ -264,15 +264,15 @@ const CommentsPage: React.FC = () => {
           },
           body: JSON.stringify(replyData),
         });
-        
+
         const data = await response.json();
-        
+
         if (data.status === 201) {
           // Update status of the original comment if specified
           if (values.status && currentComment) {
             await handleStatusChange(currentComment.id, values.status);
           }
-          
+
           message.success('Đã gửi phản hồi thành công');
           setIsReplyModalVisible(false);
           setCurrentComment(null);
@@ -301,9 +301,9 @@ const CommentsPage: React.FC = () => {
         },
         body: JSON.stringify({ status: newStatus }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.status === 200) {
         setComments(comments.map(comment => {
           if (comment.id === id) {
@@ -311,7 +311,7 @@ const CommentsPage: React.FC = () => {
           }
           return comment;
         }));
-        
+
         let statusText = '';
         switch (newStatus) {
           case 'PUBLISHED':
@@ -324,7 +324,7 @@ const CommentsPage: React.FC = () => {
             statusText = 'từ chối';
             break;
         }
-        
+
         message.success(`Đã ${statusText} bình luận thành công`);
       } else {
         message.error('Failed to update comment status');
@@ -344,9 +344,9 @@ const CommentsPage: React.FC = () => {
           Authorization: `Bearer ${token}`,
         }
       });
-      
+
       const data = await response.json();
-      
+
       if (data.status === 200) {
         setComments(comments.filter(comment => comment.id !== commentId));
         message.success('Đã xóa bình luận thành công');
@@ -474,6 +474,17 @@ const CommentsPage: React.FC = () => {
       key: 'createdAt',
       sorter: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       defaultSortOrder: 'descend',
+      render: (date: string) => <Typography.Text type="secondary">
+        {new Date(date).toLocaleString('vi-VN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        })}
+      </Typography.Text>,
     },
     {
       title: 'Tương tác',
@@ -490,36 +501,36 @@ const CommentsPage: React.FC = () => {
       render: (_, record) => (
         <Space>
           <Tooltip title="Xem chi tiết">
-            <Button 
-              icon={<EyeOutlined />} 
-              size="small" 
-              onClick={() => showViewModal(record)} 
+            <Button
+              icon={<EyeOutlined />}
+              size="small"
+              onClick={() => showViewModal(record)}
             />
           </Tooltip>
           <Tooltip title="Trả lời">
-            <Button 
-              icon={<MessageOutlined />} 
-              size="small" 
-              onClick={() => showReplyModal(record)} 
+            <Button
+              icon={<MessageOutlined />}
+              size="small"
+              onClick={() => showReplyModal(record)}
             />
           </Tooltip>
           {record.status === 'PENDING' && (
             <Tooltip title="Phê duyệt">
-              <Button 
-                icon={<CheckOutlined />} 
+              <Button
+                icon={<CheckOutlined />}
                 size="small"
                 style={{ color: '#52c41a' }}
-                onClick={() => handleStatusChange(record.id, 'PUBLISHED')} 
+                onClick={() => handleStatusChange(record.id, 'PUBLISHED')}
               />
             </Tooltip>
           )}
           {record.status === 'PENDING' && (
             <Tooltip title="Từ chối">
-              <Button 
-                icon={<CloseOutlined />} 
+              <Button
+                icon={<CloseOutlined />}
                 size="small"
                 style={{ color: '#f5222d' }}
-                onClick={() => handleStatusChange(record.id, 'REJECTED')} 
+                onClick={() => handleStatusChange(record.id, 'REJECTED')}
               />
             </Tooltip>
           )}
@@ -530,10 +541,10 @@ const CommentsPage: React.FC = () => {
               okText="Có"
               cancelText="Không"
             >
-              <Button 
-                icon={<DeleteOutlined />} 
-                size="small" 
-                danger 
+              <Button
+                icon={<DeleteOutlined />}
+                size="small"
+                danger
               />
             </Popconfirm>
           </Tooltip>
@@ -544,7 +555,7 @@ const CommentsPage: React.FC = () => {
 
   const bulkApprove = async () => {
     if (selectedRowKeys.length === 0) return;
-    
+
     try {
       const token = await authTokenLogin(refreshToken, refresh, navigate);
       const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/comments/bulk/status`, {
@@ -558,9 +569,9 @@ const CommentsPage: React.FC = () => {
           status: 'PUBLISHED'
         }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.status === 200) {
         setComments(comments.map(comment => {
           if (selectedRowKeys.includes(comment.id)) {
@@ -568,7 +579,7 @@ const CommentsPage: React.FC = () => {
           }
           return comment;
         }));
-        
+
         message.success(`Đã phê duyệt ${selectedRowKeys.length} bình luận`);
         setSelectedRowKeys([]);
         await refreshComments(); // Refresh the list with await
@@ -583,7 +594,7 @@ const CommentsPage: React.FC = () => {
 
   const bulkReject = async () => {
     if (selectedRowKeys.length === 0) return;
-    
+
     try {
       const token = await authTokenLogin(refreshToken, refresh, navigate);
       const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/comments/bulk/status`, {
@@ -597,9 +608,9 @@ const CommentsPage: React.FC = () => {
           status: 'REJECTED'
         }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.status === 200) {
         setComments(comments.map(comment => {
           if (selectedRowKeys.includes(comment.id)) {
@@ -607,7 +618,7 @@ const CommentsPage: React.FC = () => {
           }
           return comment;
         }));
-        
+
         message.success(`Đã từ chối ${selectedRowKeys.length} bình luận`);
         setSelectedRowKeys([]);
         await refreshComments(); // Refresh the list with await
@@ -622,7 +633,7 @@ const CommentsPage: React.FC = () => {
 
   const bulkDelete = async () => {
     if (selectedRowKeys.length === 0) return;
-    
+
     try {
       const token = await authTokenLogin(refreshToken, refresh, navigate);
       const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/comments/bulk`, {
@@ -633,12 +644,12 @@ const CommentsPage: React.FC = () => {
         },
         body: JSON.stringify({ ids: selectedRowKeys }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.status === 200) {
         setComments(comments.filter(comment => !selectedRowKeys.includes(comment.id)));
-        
+
         message.success(`Đã xóa ${selectedRowKeys.length} bình luận`);
         setSelectedRowKeys([]);
         await refreshComments(); // Refresh the list with await
@@ -659,16 +670,16 @@ const CommentsPage: React.FC = () => {
         <Space direction="vertical" style={{ width: '100%' }}>
           <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
             <Space>
-              <Button 
-                type="primary" 
-                icon={<CheckOutlined />} 
+              <Button
+                type="primary"
+                icon={<CheckOutlined />}
                 onClick={bulkApprove}
                 disabled={selectedRowKeys.length === 0}
               >
                 Phê duyệt ({selectedRowKeys.length})
               </Button>
-              <Button 
-                icon={<CloseOutlined />} 
+              <Button
+                icon={<CloseOutlined />}
                 onClick={bulkReject}
                 disabled={selectedRowKeys.length === 0}
               >
@@ -681,9 +692,9 @@ const CommentsPage: React.FC = () => {
                 cancelText="Không"
                 disabled={selectedRowKeys.length === 0}
               >
-                <Button 
-                  danger 
-                  icon={<DeleteOutlined />} 
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
                   disabled={selectedRowKeys.length === 0}
                 >
                   Xóa ({selectedRowKeys.length})
@@ -698,15 +709,15 @@ const CommentsPage: React.FC = () => {
                 onChange={(e) => setSearchText(e.target.value)}
                 style={{ width: 250 }}
               />
-               
-              <Select 
-                defaultValue="ALL" 
+
+              <Select
+                defaultValue="ALL"
                 style={{ width: 150 }}
                 onChange={handleTargetTypeChange}
               >
                 <Option value="ALL">Tất cả nguồn</Option>
                 <Option value="COURSE">Khóa học</Option>
-             
+                <Option value="ARTICLE">Bài viết</Option>
               </Select>
             </Space>
           </Space>
@@ -748,9 +759,9 @@ const CommentsPage: React.FC = () => {
           <Button key="back" onClick={handleModalCancel}>
             Đóng
           </Button>,
-          <Button 
-            key="reply" 
-            type="primary" 
+          <Button
+            key="reply"
+            type="primary"
             onClick={() => {
               setIsViewModalVisible(false);
               showReplyModal(currentComment!);
@@ -769,8 +780,8 @@ const CommentsPage: React.FC = () => {
                 {getRoleTag(currentComment.authorRole)}
               </Space>}
               avatar={
-                <Avatar 
-                  src={currentComment.authorAvatar} 
+                <Avatar
+                  src={currentComment.authorAvatar}
                   icon={!currentComment.authorAvatar && <UserOutlined />}
                 />
               }
@@ -783,12 +794,22 @@ const CommentsPage: React.FC = () => {
               }
               datetime={
                 <Space direction="vertical" size={0}>
-                  <Text type="secondary">{currentComment.createdAt}</Text>
-                  <Text type="secondary">
+                  <Typography.Text type="secondary">
+                    {new Date(currentComment.createdAt).toLocaleString('vi-VN', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                      hour12: false
+                    })}
+                  </Typography.Text>
+                  <Typography.Text type="secondary">
                     <Space>
                       <span><MessageOutlined /> {currentComment.replies}</span>
                     </Space>
-                  </Text>
+                  </Typography.Text>
                 </Space>
               }
             />
@@ -823,9 +844,9 @@ const CommentsPage: React.FC = () => {
             <div style={{ marginTop: 20 }}>
               <Space>
                 {currentComment.status === 'PENDING' && (
-                  <Button 
-                    type="primary" 
-                    icon={<CheckOutlined />} 
+                  <Button
+                    type="primary"
+                    icon={<CheckOutlined />}
                     onClick={async () => {
                       await handleStatusChange(currentComment.id, 'PUBLISHED');
                       setIsViewModalVisible(false);
@@ -836,9 +857,9 @@ const CommentsPage: React.FC = () => {
                   </Button>
                 )}
                 {currentComment.status === 'PENDING' && (
-                  <Button 
-                    danger 
-                    icon={<CloseOutlined />} 
+                  <Button
+                    danger
+                    icon={<CloseOutlined />}
                     onClick={async () => {
                       await handleStatusChange(currentComment.id, 'REJECTED');
                       setIsViewModalVisible(false);
@@ -884,8 +905,8 @@ const CommentsPage: React.FC = () => {
               <Comment
                 author={<Text strong>{currentComment.authorName}</Text>}
                 avatar={
-                  <Avatar 
-                    src={currentComment.authorAvatar} 
+                  <Avatar
+                    src={currentComment.authorAvatar}
                     icon={!currentComment.authorAvatar && <UserOutlined />}
                   />
                 }
@@ -894,7 +915,19 @@ const CommentsPage: React.FC = () => {
                     <Paragraph>{currentComment.content}</Paragraph>
                   </div>
                 }
-                datetime={currentComment.createdAt}
+                datetime={
+                  <Typography.Text type="secondary">
+                    {new Date(currentComment.createdAt).toLocaleString('vi-VN', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                      hour12: false
+                    })}
+                  </Typography.Text>
+                }
               />
             </Card>
 

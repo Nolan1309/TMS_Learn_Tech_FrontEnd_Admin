@@ -28,157 +28,184 @@ import {
   ReloadOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { authTokenLogin } from '../../utils';
+import { useNavigate } from 'react-router-dom';
+import useRefreshToken from '../../utils/useRefreshToken';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 const { RangePicker } = DatePicker;
 
-interface CourseEvaluation {
+interface Evaluation {
   id: string;
   courseId: string;
   courseName: string;
-  studentId: string;
-  studentName: string;
+  testId: string;
+  testName: string;
+  accountId: string;
+  accountName: string;
   rating: number;
-  comment: string;
+  review: string;
   createdAt: string;
+  updatedAt: string;
+  deletedDate: string;
+  isDeleted: boolean;
+  reviewType : 'COURSE' | 'TEST';
   status: 'approved' | 'pending' | 'rejected';
 }
 
-// Mock data for demonstration
-const mockEvaluations: CourseEvaluation[] = [
-  {
-    id: '1',
-    courseId: 'C001',
-    courseName: 'Lập trình React cơ bản',
-    studentId: 'ST001',
-    studentName: 'Nguyễn Văn A',
-    rating: 4,
-    comment: 'Khóa học rất hay và dễ hiểu. Giảng viên nhiệt tình giải đáp thắc mắc.',
-    createdAt: '2023-09-15T08:30:00',
-    status: 'approved',
-  },
-  {
-    id: '2',
-    courseId: 'C002',
-    courseName: 'JavaScript nâng cao',
-    studentId: 'ST002',
-    studentName: 'Trần Thị B',
-    rating: 5,
-    comment: 'Tuyệt vời! Tôi đã học được rất nhiều từ khóa học này.',
-    createdAt: '2023-09-16T14:20:00',
-    status: 'approved',
-  },
-  {
-    id: '3',
-    courseId: 'C003',
-    courseName: 'Node.js và Express',
-    studentId: 'ST003',
-    studentName: 'Lê Văn C',
-    rating: 3,
-    comment: 'Khóa học khá tốt nhưng cần bổ sung thêm ví dụ thực tế.',
-    createdAt: '2023-09-17T10:15:00',
-    status: 'pending',
-  },
-  {
-    id: '4',
-    courseId: 'C001',
-    courseName: 'Lập trình React cơ bản',
-    studentId: 'ST004',
-    studentName: 'Phạm Thị D',
-    rating: 2,
-    comment: 'Nội dung khó hiểu, cần giải thích kỹ hơn các khái niệm.',
-    createdAt: '2023-09-18T09:45:00',
-    status: 'rejected',
-  },
-];
+interface Course {
+  id: number;
+  title: string;
+  description: string;
+  imageUrl: string;
+  courseOutput: string;
+  language: string;
+  author: string;
+  duration: number;
+  cost: number;
+  price: number;
+  createdAt: string;
+  updatedAt: string;
+  status: boolean;
+  type: string;
+  deletedDate: string;
+  accountId: number;
+  categoryNameLevel3: string;
+  categoryIdLevel3: number;
+  categoryNameLevel2: string;
+  categoryIdLevel2: number;
+  categoryNameLevel1: string;
+  categoryIdLevel1: number;
+  deleted: boolean;
+}
 
-// API URL
-const API_URL = 'http://localhost:8080/api';
+interface ApiResponse<T> {
+  code: number;
+  message: string;
+  data: T;
+}
+
+interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
+
 
 const CourseEvaluations: React.FC = () => {
-  const [evaluations, setEvaluations] = useState<CourseEvaluation[]>(mockEvaluations);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [searchText, setSearchText] = useState<string>('');
   const [isDetailModalVisible, setIsDetailModalVisible] = useState<boolean>(false);
-  const [currentEvaluation, setCurrentEvaluation] = useState<CourseEvaluation | null>(null);
+  const [currentEvaluation, setCurrentEvaluation] = useState<Evaluation | null>(null);
   const [isEditModalVisible, setIsEditModalVisible] = useState<boolean>(false);
   const [form] = Form.useForm();
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  
+  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const navigate = useNavigate();
+  const refresh = useRefreshToken();
+  const refreshToken = localStorage.getItem("refreshToken");
   // Filter states
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterRating, setFilterRating] = useState<number | null>(null);
+  const [reviewType, setReviewType] = useState<'COURSE' | 'TEST'>('COURSE');
   
-  // Fetch reviews by course ID from API
-  const fetchReviewsByCourseId = async (courseId: string) => {
+  // Pagination states
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0
+  });
+  const fetchCourseList = async () => {
     setLoading(true);
+    const token = await authTokenLogin(refreshToken, refresh, navigate);
     try {
-      const response = await fetch(`${API_URL}/course/${courseId}`);
+      // Update the URL to point to your actual API
+      const response = await fetch(
+        `${process.env.REACT_APP_SERVER_HOST}/api/courses/get-all-result-list`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          }
+        }
+      );
+
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        throw new Error("Failed to fetch course data");
       }
-      const data = await response.json();
-      
-      // Transform API data to match our CourseEvaluation interface if needed
-      const apiEvaluations = data.map((review: any) => ({
-        id: review.id.toString(),
-        courseId: review.courseId.toString(),
-        courseName: review.courseName || 'Unknown Course', // Add default if not available in API
-        studentId: review.studentId.toString(),
-        studentName: review.studentName || 'Unknown Student', // Add default if not available in API
-        rating: review.rating,
-        comment: review.comment,
-        createdAt: review.createdAt,
-        status: review.status || 'pending', // Add default if not available in API
-      }));
-      setEvaluations(apiEvaluations);
-    } catch (error) {
-      console.error("Error fetching reviews:", error);
-      message.error("Không thể tải đánh giá. Vui lòng thử lại sau.");
-      // Fallback to mock data for demo
-      setEvaluations(mockEvaluations);
+
+      const data: Course[] = await response.json();
+      setCourses(data);
+    } catch (error: any) {
+      console.error("Failed to fetch courses:", error);
+      message.error("Không thể tải danh sách khóa học");
     } finally {
       setLoading(false);
     }
   };
-  
-  // Load data function
-  const fetchEvaluations = () => {
+  // Fetch reviews from API with all required parameters
+  const fetchEvaluations = async (page = 0, size = 10) => {
     setLoading(true);
-    // If no course selected, load all evaluations or mock data
-    if (!selectedCourseId) {
-      // Here you would typically call an API to get all evaluations
-      // For demo, we'll use mock data
-      setTimeout(() => {
-        setEvaluations(mockEvaluations);
-        setLoading(false);
-      }, 500);
-    } else {
-      // Fetch evaluations for the selected course
-      fetchReviewsByCourseId(selectedCourseId);
+    try {
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append('reviewType', reviewType);
+      params.append('page', page.toString());
+      params.append('size', size.toString());
+      
+      // Add optional parameters if they exist
+      if (searchText) params.append('keyword', searchText);
+      if (selectedCourseId) params.append('courseId', selectedCourseId.toString());
+      if (filterStatus !== 'all') params.append('status', filterStatus);
+      if (filterRating !== null) params.append('rating', filterRating.toString());
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+      const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/reviews/admin?${params.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+      
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      
+      const result: ApiResponse<PageResponse<Evaluation>> = await response.json();
+      
+      if (result.data) {
+        setEvaluations(result.data.content);
+        setPagination({
+          current: result.data.number + 1, // API returns 0-based index
+          pageSize: result.data.size,
+          total: result.data.totalElements
+        });
+      } else {
+        throw new Error(result.message || 'Failed to fetch data');
+      }
+    } catch (error) {
+      console.error("Error fetching reviews:", error);
+      message.error("Không thể tải đánh giá. Vui lòng thử lại sau.");
+      // Fallback to mock data for demo
+      setEvaluations([]);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchEvaluations();
-  }, [selectedCourseId]);
-
-  // Filter function
-  const getFilteredEvaluations = () => {
-    return evaluations.filter(evaluation => {
-      const matchesSearch = 
-        evaluation.courseName.toLowerCase().includes(searchText.toLowerCase()) ||
-        evaluation.studentName.toLowerCase().includes(searchText.toLowerCase()) ||
-        evaluation.comment.toLowerCase().includes(searchText.toLowerCase());
-      
-      const matchesStatus = filterStatus === 'all' || evaluation.status === filterStatus;
-      const matchesRating = filterRating === null || evaluation.rating === filterRating;
-      
-      return matchesSearch && matchesStatus && matchesRating;
-    });
-  };
+    fetchCourseList();
+    fetchEvaluations(pagination.current - 1, pagination.pageSize);
+  }, [reviewType, selectedCourseId, filterStatus, filterRating, pagination.current, pagination.pageSize]);
 
   // Reset filters
   const resetFilters = () => {
@@ -186,48 +213,97 @@ const CourseEvaluations: React.FC = () => {
     setFilterStatus('all');
     setFilterRating(null);
     setSelectedCourseId(null);
+    fetchEvaluations(0, pagination.pageSize);
+  };
+
+  // Handle search
+  const handleSearch = () => {
+    fetchEvaluations(0, pagination.pageSize);
   };
 
   // View details
-  const showDetailModal = (record: CourseEvaluation) => {
+  const showDetailModal = (record: Evaluation) => {
     setCurrentEvaluation(record);
     setIsDetailModalVisible(true);
   };
 
   // Edit function
-  const showEditModal = (record: CourseEvaluation) => {
+  const showEditModal = (record: Evaluation) => {
     setCurrentEvaluation(record);
     form.setFieldsValue({
       status: record.status,
-      comment: record.comment,
+      review: record.review,
     });
     setIsEditModalVisible(true);
   };
 
   // Delete function
-  const handleDelete = (id: string) => {
-    setEvaluations(prev => prev.filter(item => item.id !== id));
-    message.success('Đã xóa đánh giá thành công');
+  const handleDelete = async (id: string) => {
+    try {
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+      // Call API to delete evaluation
+      const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/reviews/admin/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      
+      message.success('Đã xóa đánh giá thành công');
+      fetchEvaluations(pagination.current - 1, pagination.pageSize);
+    } catch (error) {
+      console.error("Error deleting review:", error);
+      message.error("Không thể xóa đánh giá. Vui lòng thử lại sau.");
+    }
   };
 
   // Submit edit
-  const handleEditSubmit = () => {
-    form.validateFields().then(values => {
+  const handleEditSubmit = async () => {
+    try {
+      const values = await form.validateFields();
+      
       if (currentEvaluation) {
-        const updatedEvaluations = evaluations.map(evaluation => 
-          evaluation.id === currentEvaluation.id 
-            ? { ...evaluation, status: values.status, comment: values.comment }
-            : evaluation
-        );
-        setEvaluations(updatedEvaluations);
+        const token = await authTokenLogin(refreshToken, refresh, navigate);
+        // Call API to update evaluation
+        const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/reviews/admin/${currentEvaluation.id}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: values.status,
+            review: values.review,
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        
         setIsEditModalVisible(false);
         message.success('Cập nhật đánh giá thành công');
+        fetchEvaluations(pagination.current - 1, pagination.pageSize);
       }
-    });
+    } catch (error) {
+      console.error("Error updating review:", error);
+      message.error("Không thể cập nhật đánh giá. Vui lòng thử lại sau.");
+    }
+  };
+
+  // Handle pagination change
+  const handleTableChange = (pagination: any) => {
+    setPagination(pagination);
+    fetchEvaluations(pagination.current - 1, pagination.pageSize);
   };
 
   // Table columns
-  const columns: ColumnsType<CourseEvaluation> = [
+  const columns: ColumnsType<Evaluation> = [
     {
       title: 'ID',
       dataIndex: 'id',
@@ -242,8 +318,8 @@ const CourseEvaluations: React.FC = () => {
     },
     {
       title: 'Học viên',
-      dataIndex: 'studentName',
-      key: 'studentName',
+      dataIndex: 'accountName',
+      key: 'accountName',
       ellipsis: true,
     },
     {
@@ -281,11 +357,19 @@ const CourseEvaluations: React.FC = () => {
       },
     },
     {
-      title: 'Ngày tạo',
+      title: 'Ngày đánh giá',
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 150,
-      render: (date: string) => new Date(date).toLocaleDateString('vi-VN'),
+      render: (date: string) => new Date(date).toLocaleString('vi-VN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }),
     },
     {
       title: 'Thao tác',
@@ -326,16 +410,12 @@ const CourseEvaluations: React.FC = () => {
     },
   ];
 
-  // Mock courses for the course selector
-  const courses = [
-    { id: 'C001', name: 'Lập trình React cơ bản' },
-    { id: 'C002', name: 'JavaScript nâng cao' },
-    { id: 'C003', name: 'Node.js và Express' },
-  ];
 
   return (
     <div>
-      <div className="evaluation-filters">
+      <div className="evaluation-filters" style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      
+        
         <Input
           placeholder="Tìm kiếm theo khóa học, học viên, nội dung"
           value={searchText}
@@ -343,6 +423,7 @@ const CourseEvaluations: React.FC = () => {
           prefix={<SearchOutlined />}
           style={{ width: 300 }}
           allowClear
+          onPressEnter={handleSearch}
         />
         
         <Select
@@ -351,9 +432,10 @@ const CourseEvaluations: React.FC = () => {
           value={selectedCourseId}
           onChange={value => setSelectedCourseId(value)}
           allowClear
+          disabled={reviewType !== 'COURSE'}
         >
           {courses.map(course => (
-            <Option key={course.id} value={course.id}>{course.name}</Option>
+            <Option key={course.id} value={course.id}>{course.title}</Option>
           ))}
         </Select>
         
@@ -374,14 +456,23 @@ const CourseEvaluations: React.FC = () => {
           style={{ width: 150 }}
           value={filterRating}
           onChange={value => setFilterRating(value)}
-          allowClear
+          
         >
+          <Option value={null}>Tất cả</Option>
           <Option value={1}>1 sao</Option>
           <Option value={2}>2 sao</Option>
           <Option value={3}>3 sao</Option>
           <Option value={4}>4 sao</Option>
           <Option value={5}>5 sao</Option>
         </Select>
+        
+        <Button 
+          onClick={handleSearch}
+          type="primary"
+          icon={<SearchOutlined />}
+        >
+          Tìm kiếm
+        </Button>
         
         <Button 
           icon={<ReloadOutlined />} 
@@ -400,14 +491,15 @@ const CourseEvaluations: React.FC = () => {
       
       <Table
         columns={columns}
-        dataSource={getFilteredEvaluations()}
+        dataSource={evaluations}
         rowKey="id"
         loading={loading}
         pagination={{
-          pageSize: 10,
+          ...pagination,
           showSizeChanger: true,
           showTotal: (total) => `Tổng cộng ${total} đánh giá`,
         }}
+        onChange={handleTableChange}
       />
       
       {/* Detail Modal */}
@@ -440,7 +532,7 @@ const CourseEvaluations: React.FC = () => {
             <Col span={24}>
               <Card title="Thông tin đánh giá" bordered={false}>
                 <p><strong>Khóa học:</strong> {currentEvaluation.courseName}</p>
-                <p><strong>Học viên:</strong> {currentEvaluation.studentName}</p>
+                <p><strong>Học viên:</strong> {currentEvaluation.accountName}</p>
                 <p><strong>Ngày đánh giá:</strong> {new Date(currentEvaluation.createdAt).toLocaleString('vi-VN')}</p>
                 <p><strong>Trạng thái:</strong> {
                   currentEvaluation.status === 'approved' ? 'Đã duyệt' :
@@ -456,7 +548,7 @@ const CourseEvaluations: React.FC = () => {
                 </div>
                 <div className="evaluation-comment">
                   <strong>Nhận xét:</strong>
-                  <Paragraph>{currentEvaluation.comment}</Paragraph>
+                  <Paragraph>{currentEvaluation.review}</Paragraph>
                 </div>
               </Card>
             </Col>
@@ -490,7 +582,7 @@ const CourseEvaluations: React.FC = () => {
           </Form.Item>
           
           <Form.Item
-            name="comment"
+            name="review"
             label="Nhận xét"
           >
             <TextArea rows={4} />

@@ -10,7 +10,8 @@ import {
   DownloadOutlined, UploadOutlined, FileOutlined, TeamOutlined,
   FilePdfOutlined, TrophyOutlined, ClockCircleOutlined,
   CheckCircleOutlined, FormOutlined, LockOutlined, UnlockOutlined,
-  DollarOutlined, ImportOutlined, ExportOutlined
+  DollarOutlined, ImportOutlined, ExportOutlined,
+  FileWordOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
@@ -20,6 +21,7 @@ import { authTokenLogin } from '../../utils';
 import { CKEditor } from '@ckeditor/ckeditor5-react';
 // @ts-ignore - sửa lỗi type cho ClassicEditor
 import ClassicEditor from '@ckeditor/ckeditor5-build-classic';
+import './MockExams.css';
 
 const { Title, Paragraph, Text } = Typography;
 const { Search } = Input;
@@ -32,6 +34,8 @@ export const ADMIN_DELETE_EXAM = `${process.env.REACT_APP_SERVER_HOST}/api/tests
 export const ADMIN_GET_DELETED_EXAMS = `${process.env.REACT_APP_SERVER_HOST}/api/tests/deleted/list-all-exam`;
 export const ADMIN_RESTORE_EXAM = `${process.env.REACT_APP_SERVER_HOST}/api/tests/restore-exam`;
 export const ADMIN_ADD_QUESTION_TO_TEST_V2 = `${process.env.REACT_APP_SERVER_HOST}/api/test-questions/add-questions-v2`;
+export const ADMIN_EXPORT_DOCX = `${process.env.REACT_APP_SERVER_HOST}/api/tests/export-docx`;
+
 interface Course {
   id: number;
   title: string;
@@ -101,13 +105,14 @@ export interface TestWithExamInfo {
   createdAt: string; // ISO string, dùng Date nếu cần
   updatedAt: string;
   itemCount: number;
-
+  discountStatus: boolean;
   intro: string;
   imageUrl: string;
   level: 'EASY' | 'MEDIUM' | 'HARD';
   price: number;
   cost: number;
-
+  testContent: string;
+  knowledgeRequirement: string;
   examType: 'FREE' | 'FEE';
   status: 'ACTIVE' | 'INACTIVE';
 
@@ -250,6 +255,12 @@ const MockExamsPage: React.FC = () => {
     const course = courses.find(c => c.id === courseId);
     return course ? course.title : 'Chưa xác định';
   };
+
+  // Helper function to convert seconds to minutes
+  const secondsToMinutes = (seconds: number): number => {
+    return Math.round(seconds / 60);
+  };
+
   const fetchQuestionsWithExactPagination = async (apiPage: number, pageSize: number) => {
     if (!currentExam) return;
 
@@ -259,7 +270,7 @@ const MockExamsPage: React.FC = () => {
     if (!token) return;
 
     try {
-    
+
       // Process filter values to ensure proper API parameters
       const typeParam = typeFilter === 'all' ? '' : typeFilter;
       const levelParam = levelFilter === 'all' ? '' : levelFilter;
@@ -390,7 +401,7 @@ const MockExamsPage: React.FC = () => {
 
   const handleQuestionsTypeFilterChange = (value: string) => {
     setTypeFilter(value);
-    setQuestionPage(0); 
+    setQuestionPage(0);
   };
 
   const handleQuestionsLevelFilterChange = (value: string) => {
@@ -441,9 +452,6 @@ const MockExamsPage: React.FC = () => {
     setSelectedRowKeys([]);
   };
 
-  const handleSubjectChange = (value: string) => {
-    setFilterSubject(value);
-  };
 
   const onSelectChange = (newSelectedRowKeys: React.Key[]) => {
     setSelectedRowKeys(newSelectedRowKeys);
@@ -496,13 +504,15 @@ const MockExamsPage: React.FC = () => {
           formData.append("easyQuestion", String(values.easyQuestion));
           formData.append("mediumQuestion", String(values.mediumQuestion));
           formData.append("hardQuestion", String(values.hardQuestion));
-          formData.append("duration", String(values.duration * 60)); // phút → giây
+          formData.append("duration", String(values.duration * 60)); // Convert minutes to seconds
           formData.append("point", String(values.point || 0));
           formData.append("price", String(values.price || 0));
           formData.append("cost", String(values.cost || 0));
 
-          formData.append("intro", values.description || '');
-
+          formData.append("intro", values.intro || '');
+          formData.append("description", values.intro || '');
+          formData.append("testContent", values.testContent || '');
+          formData.append("knowledgeRequirement", values.knowledgeRequirement || '');
           // Xử lý file ảnh
           if (values.imageUrl && values.imageUrl.length > 0) {
             // Nếu là file mới upload
@@ -580,6 +590,11 @@ const MockExamsPage: React.FC = () => {
       ];
     }
 
+    // If exam is on discount, show an alert to the user
+    if (exam.discountStatus) {
+      message.warning('Đề thi này đang được áp dụng giảm giá, không thể chỉnh sửa giá bán.');
+    }
+
     editForm.setFieldsValue({
       title: exam.title,
       courseId: exam.courseId,
@@ -589,7 +604,7 @@ const MockExamsPage: React.FC = () => {
       easyQuestion: exam.easyQuestion,
       mediumQuestion: exam.mediumQuestion,
       hardQuestion: exam.hardQuestion,
-      duration: exam.duration,
+      duration: secondsToMinutes(exam.duration),
       type: exam.type,
       examType: exam.examType,
       cost: info.cost,
@@ -598,6 +613,9 @@ const MockExamsPage: React.FC = () => {
       status: exam.status,
       imageUrl: imageFileList,
       point: exam.point,
+      intro: exam.intro,
+      testContent: exam.testContent,
+      knowledgeRequirement: exam.knowledgeRequirement,
     });
   };
 
@@ -622,28 +640,29 @@ const MockExamsPage: React.FC = () => {
           const formData = new FormData();
 
           // Thêm trường dữ liệu
-          // formData.append("testId", currentExam.testId.toString());
           formData.append("title", values.title);
-          formData.append("description", values.description || '');
           formData.append("format", "exam");
 
           formData.append("type", Array.isArray(values.type) ? values.type : [values.type]);
           formData.append("status", values.status);
           formData.append("examType", values.examType);
           formData.append("level", values.level);
+          formData.append("testContent", values.testContent || '');
+          formData.append("knowledgeRequirement", values.knowledgeRequirement || '');
 
           formData.append("courseId", String(values.courseId || currentExam.courseId));
           formData.append("totalQuestion", String(values.totalQuestion));
           formData.append("easyQuestion", String(values.easyQuestion));
           formData.append("mediumQuestion", String(values.mediumQuestion));
           formData.append("hardQuestion", String(values.hardQuestion));
-          formData.append("duration", String(values.duration * 60)); // phút → giây
+          formData.append("duration", String(values.duration * 60)); // Convert minutes to seconds
           formData.append("point", String(values.point || 0));
           formData.append("price", String(values.price || 0));
           formData.append("cost", String(values.cost || 0));
 
-          formData.append("intro", values.description || '');
-
+          //Xài chung cho 2 bảng
+          formData.append("intro", values.intro || '');
+          formData.append("description", values.intro || '');
           // Xử lý file ảnh
           if (values.imageUrl && values.imageUrl.length > 0) {
             // Nếu là file mới upload
@@ -706,24 +725,8 @@ const MockExamsPage: React.FC = () => {
     questionForm.resetFields();
   };
 
-  const handleQuestionSearch = (value: string) => {
-    setQuestionSearchText(value);
-  };
 
-  // const handleAddQuestionsSubmit = () => {
-  //   if (selectedQuestions.length === 0) {
-  //     message.warning('Vui lòng chọn ít nhất một câu hỏi!');
-  //     return;
-  //   }
 
-  //   console.log('Selected questions:', selectedQuestions);
-  //   message.success(`Đã thêm ${selectedQuestions.length} câu hỏi vào đề thi!`);
-  //   setAddQuestionsVisible(false);
-  //   setCurrentExam(null);
-  //   setSelectedQuestions([]);
-  //   setQuestionSearchText('');
-  //   questionForm.resetFields();
-  // };
 
   const handleAddQuestionsSubmit = async () => {
     if (!currentExam) return;
@@ -744,26 +747,6 @@ const MockExamsPage: React.FC = () => {
 
         message.warning("Chức năng tự động chưa được triển khai!");
         return;
-        // Automatic mode: Server will generate and add questions
-        // const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/questions/generate-for-exam/${currentExam.id}`, {
-        //   method: "POST",
-        //   headers: {
-        //     "Content-Type": "application/json",
-        //     Authorization: `Bearer ${token}`,
-        //   },
-        //   body: JSON.stringify({
-        //     // Add any parameters needed for automatic generation
-        //     excludeFromChapterTests: true,
-        //     excludeFromLessonTests: true,
-        //     prioritizeNewest: true
-        //   }),
-        // });
-
-        // if (!response.ok) {
-        //   throw new Error("Failed to auto-generate questions");
-        // }
-
-        // message.success(`Đã tự động thêm ${currentExam.totalQuestion} câu hỏi vào bài kiểm tra thành công!`);
 
       } else {
         // Manual mode: Add selected questions
@@ -772,7 +755,7 @@ const MockExamsPage: React.FC = () => {
           setLoading(false);
           return;
         }
-        
+
         // Instead of making separate DELETE calls, send all selected questions to the backend
         // The backend will handle adding new questions and removing deselected ones
         const response = await fetch(`${ADMIN_ADD_QUESTION_TO_TEST_V2}/${currentExam.testId}`, {
@@ -888,6 +871,8 @@ const MockExamsPage: React.FC = () => {
       title: 'Tên đề thi',
       dataIndex: 'title',
       key: 'title',
+      fixed: 'left',
+      width: 200,
       render: (text: string, record: TestWithExamInfo) => {
         const info = enrichExamInfo(record);
         return (
@@ -905,18 +890,16 @@ const MockExamsPage: React.FC = () => {
       title: 'Thông tin',
       dataIndex: 'info',
       key: 'info',
+      width: 150,
       render: (_, record: TestWithExamInfo) => {
         const info = enrichExamInfo(record);
         return (
           <Space direction="vertical" size={0}>
             <Text>
-              {/* {const durationInMinutes = record.duration ? Math.round(record.duration / 60) : 0;} */}
-
-              <ClockCircleOutlined style={{ marginRight: 4 }} /> {Math.round(record.duration / 60)} phút | {record.totalQuestion} câu
+              <ClockCircleOutlined style={{ marginRight: 4 }} /> {secondsToMinutes(record.duration)} phút | {record.totalQuestion} câu
             </Text>
             <Space size={4}>
               {getDifficultyTag(info.level)}
-              {/* <Text>Điểm đạt: ≥ {info.passingScore}</Text> */}
             </Space>
           </Space>
         );
@@ -926,6 +909,7 @@ const MockExamsPage: React.FC = () => {
       title: 'Thống kê',
       dataIndex: 'itemCount',
       key: 'itemCount',
+      width: 130,
       render: (_, record: TestWithExamInfo) => {
         const info = enrichExamInfo(record);
         return (
@@ -944,6 +928,7 @@ const MockExamsPage: React.FC = () => {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
+      width: 150,
       render: (_, record: TestWithExamInfo) => {
         const info = enrichExamInfo(record);
         return getStatusTag(record.status, record.examType);
@@ -958,6 +943,7 @@ const MockExamsPage: React.FC = () => {
       title: 'Giá',
       dataIndex: 'price',
       key: 'price',
+      width: 160,
       render: (_, record: TestWithExamInfo) => {
         const info = enrichExamInfo(record);
         const price = record.price;
@@ -967,7 +953,12 @@ const MockExamsPage: React.FC = () => {
           <Space direction="vertical" size={0}>
             {price > 0 ? (
               <>
-                <Text type="danger">{price.toLocaleString()}đ</Text>
+                <Space>
+                  <Text type="danger">{price.toLocaleString()}đ</Text>
+                  {record.discountStatus && (
+                    <Tag color="volcano">Đang giảm giá</Tag>
+                  )}
+                </Space>
                 {cost > price && (
                   <Text type="secondary" style={{ textDecoration: 'line-through', fontSize: '12px' }}>
                     {cost.toLocaleString()}đ
@@ -977,6 +968,7 @@ const MockExamsPage: React.FC = () => {
             ) : (
               <Text type="success">Miễn phí</Text>
             )}
+
           </Space>
         );
       },
@@ -986,12 +978,20 @@ const MockExamsPage: React.FC = () => {
       title: 'Ngày tạo',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      width: 120,
       render: (date, record: TestWithExamInfo) => {
         const info = enrichExamInfo(record);
         return (
           <Space direction="vertical" size={0}>
-            <Text>{date}</Text>
-            {/* <Text type="secondary" style={{ fontSize: '12px' }}>Tác giả: {info.author}</Text> */}
+            <Text>{date ? new Date(date).toLocaleString('vi-VN', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false
+            }) : 'Không xác định'}</Text>
           </Space>
         );
       },
@@ -1000,8 +1000,10 @@ const MockExamsPage: React.FC = () => {
     {
       title: 'Hành động',
       key: 'actions',
+      fixed: 'right',
+      width: 180,
       render: (_, exam: TestWithExamInfo) => (
-        <Space size="small">
+        <Space size="small" className="action-buttons">
           <Tooltip title="Xem chi tiết">
             <Button
               type="text"
@@ -1077,6 +1079,7 @@ const MockExamsPage: React.FC = () => {
       title: 'Ngày xóa',
       dataIndex: 'deletedDate',
       key: 'deletedDate',
+      width: 120,
       render: (date) => (
         <Text type="secondary">{date || 'N/A'}</Text>
       ),
@@ -1088,8 +1091,10 @@ const MockExamsPage: React.FC = () => {
     {
       title: 'Hành động',
       key: 'actions',
+      fixed: 'right',
+      width: 120,
       render: (_, exam: TestWithExamInfo) => (
-        <Space size="small">
+        <Space size="small" className="action-buttons">
           <Tooltip title="Xem chi tiết">
             <Button
               type="text"
@@ -1326,6 +1331,57 @@ const MockExamsPage: React.FC = () => {
     }
   };
 
+  const handleExportDocx = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('Vui lòng chọn ít nhất một đề thi để xuất!');
+      return;
+    }
+
+    try {
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+      if (!token) return;
+
+      const response = await fetch(`${ADMIN_EXPORT_DOCX}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          examIds: selectedRowKeys
+        })
+      });
+
+      if (response.ok) {
+        // Get the file as a blob
+        const blob = await response.blob();
+        // Create a local URL for the blob
+        const url = window.URL.createObjectURL(blob);
+        // Create a temporary anchor element
+        const a = document.createElement('a');
+        a.href = url;
+        // Get filename from Content-Disposition or use default
+        const contentDisposition = response.headers.get('Content-Disposition');
+        const filename = contentDisposition ?
+          contentDisposition.split('filename=')[1].replace(/"/g, '') :
+          'exams.docx';
+        a.download = filename;
+        // Trigger download
+        document.body.appendChild(a);
+        a.click();
+        // Cleanup
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        message.success("Tải xuống file DOCX thành công!");
+      } else {
+        const errorText = await response.text();
+        message.error(`Có lỗi xảy ra khi tải xuống file DOCX: ${errorText}`);
+      }
+    } catch (error) {
+      console.error("Error exporting to DOCX:", error);
+      message.error("Có lỗi xảy ra khi tải xuống file DOCX");
+    }
+  };
   return (
     <div>
       <style>{`
@@ -1437,9 +1493,8 @@ const MockExamsPage: React.FC = () => {
                     Xóa ({selectedRowKeys.length})
                   </Button>
                 </Popconfirm>
-              )}
-              <Button icon={<ExportOutlined />}>
-                Xuất Excel
+              )}              <Button icon={<FileWordOutlined />} onClick={handleExportDocx}>
+                Xuất DOCX ({selectedRowKeys.length})
               </Button>
             </Space>
             <Space>
@@ -1471,6 +1526,7 @@ const MockExamsPage: React.FC = () => {
                 rowKey="id"
                 loading={loading}
                 rowSelection={rowSelection}
+                scroll={{ x: 1200 }}
                 pagination={{
                   pageSize: rowsPerPage,
                   current: page,
@@ -1479,7 +1535,9 @@ const MockExamsPage: React.FC = () => {
                   showSizeChanger: true,
                   onChange: (newPage, newPageSize) => {
                     setPage(newPage);
-                    if (newPageSize) setRowsPerPage(newPageSize);
+                    if (newPageSize) {
+                      setRowsPerPage(newPageSize);
+                    }
                   },
                   showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} đề thi`
                 }}
@@ -1499,6 +1557,7 @@ const MockExamsPage: React.FC = () => {
                 rowKey="id"
                 loading={loading}
                 rowSelection={rowSelection}
+                scroll={{ x: 1200 }}
                 pagination={{
                   pageSize: rowsPerPage,
                   current: page,
@@ -1507,13 +1566,14 @@ const MockExamsPage: React.FC = () => {
                   showSizeChanger: true,
                   onChange: (newPage, newPageSize) => {
                     setPage(newPage);
-                    if (newPageSize) setRowsPerPage(newPageSize);
+                    if (newPageSize) {
+                      setRowsPerPage(newPageSize);
+                    }
                   },
                   showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} đề thi`
                 }}
               />
-            </TabPane>
-            <TabPane
+            </TabPane>            <TabPane
               tab={
                 <Badge count={exams.filter(e => e.status === 'INACTIVE').length} showZero>
                   <span>Không hoạt động</span>
@@ -1527,6 +1587,7 @@ const MockExamsPage: React.FC = () => {
                 rowKey="id"
                 loading={loading}
                 rowSelection={rowSelection}
+                scroll={{ x: 1200 }}
                 pagination={{
                   pageSize: rowsPerPage,
                   current: page,
@@ -1535,7 +1596,9 @@ const MockExamsPage: React.FC = () => {
                   showSizeChanger: true,
                   onChange: (newPage, newPageSize) => {
                     setPage(newPage);
-                    if (newPageSize) setRowsPerPage(newPageSize);
+                    if (newPageSize) {
+                      setRowsPerPage(newPageSize);
+                    }
                   },
                   showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} đề thi`
                 }}
@@ -1591,13 +1654,13 @@ const MockExamsPage: React.FC = () => {
                     disabled: false, // You can add conditions if needed
                   }),
                 }}
+                scroll={{ x: 1200 }}
                 pagination={{
                   pageSize: deletedRowsPerPage,
                   current: deletedPage,
                   total: totalDeletedElements,
                   pageSizeOptions: ['5', '10', '20', '50'],
-                  showSizeChanger: true,
-                  onChange: (newPage, newPageSize) => {
+                  showSizeChanger: true, onChange: (newPage, newPageSize) => {
                     setDeletedPage(newPage);
                     if (newPageSize) setDeletedRowsPerPage(newPageSize);
                   },
@@ -1663,7 +1726,7 @@ const MockExamsPage: React.FC = () => {
               >
                 <Select placeholder="Chọn môn học">
                   {courses.map(course => (
-                    <Option key={course.id} value={course.id.toString()}>{course.title}</Option>
+                    <Option key={course.id} value={course.id}>{course.title}</Option>
                   ))}
                 </Select>
               </Form.Item>
@@ -1691,9 +1754,8 @@ const MockExamsPage: React.FC = () => {
                 name="totalQuestion"
                 label="Số câu hỏi"
                 rules={[
-                  { required: true, message: 'Vui lòng nhập số câu hỏi!' },
-                  { type: 'number', min: 1, message: 'Số câu hỏi phải lớn hơn 0!' },
-                  { type: 'number', max: 100, message: 'Số câu hỏi không được vượt quá 100!' }
+                  { required: true, message: 'Vui lòng nhập số câu hỏi!' }
+
                 ]}
               >
                 <Input type="number" placeholder="Nhập số câu hỏi" />
@@ -1718,10 +1780,7 @@ const MockExamsPage: React.FC = () => {
               <Form.Item
                 name="point"
                 label="Điểm cộng"
-                rules={[
-                  { required: true, message: 'Vui lòng nhập điểm cộng!' },
-                  { type: 'number', min: 0, message: 'Điểm cộng không được âm!' }
-                ]}
+
               >
                 <Input type="number" placeholder="Nhập điểm cộng" />
               </Form.Item>
@@ -1794,7 +1853,7 @@ const MockExamsPage: React.FC = () => {
                 label="Số câu dễ"
                 rules={[
                   { required: true, message: 'Vui lòng nhập số câu dễ!' },
-                  { type: 'number', min: 0, message: 'Số câu dễ không được âm!' },
+
                   ({ getFieldValue }) => ({
                     validator(_, value) {
                       const total = getFieldValue('totalQuestion') || 0;
@@ -1818,7 +1877,7 @@ const MockExamsPage: React.FC = () => {
                 label="Số câu trung bình"
                 rules={[
                   { required: true, message: 'Vui lòng nhập số câu trung bình!' },
-                  { type: 'number', min: 0, message: 'Số câu trung bình không được âm!' },
+
                   ({ getFieldValue }) => ({
                     validator(_, value) {
                       const total = getFieldValue('totalQuestion') || 0;
@@ -1842,7 +1901,7 @@ const MockExamsPage: React.FC = () => {
                 label="Số câu khó"
                 rules={[
                   { required: true, message: 'Vui lòng nhập số câu khó!' },
-                  { type: 'number', min: 0, message: 'Số câu khó không được âm!' },
+
                   ({ getFieldValue }) => ({
                     validator(_, value) {
                       const total = getFieldValue('totalQuestion') || 0;
@@ -1863,8 +1922,8 @@ const MockExamsPage: React.FC = () => {
           </Row>
 
           <Form.Item
-            name="description"
-            label="Mô tả"
+            name="intro"
+            label="Giới thiệu"
             rules={[
               { max: 2000, message: 'Mô tả không được vượt quá 2000 ký tự!' }
             ]}
@@ -1872,18 +1931,63 @@ const MockExamsPage: React.FC = () => {
             <div className="custom-ckeditor-container">
               <CKEditor
                 editor={ClassicEditor as any}
-                data={form.getFieldValue('description') || ''}
+                data={form.getFieldValue('intro') || ''}
                 config={{
                   toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
-                  placeholder: 'Nhập mô tả về đề thi...',
+                  placeholder: 'Nhập giới thiệu về đề thi...',
                 }}
                 onChange={(event, editor) => {
                   const data = editor.getData();
-                  form.setFieldsValue({ description: data });
+                  form.setFieldsValue({ intro: data });
                 }}
               />
             </div>
           </Form.Item>
+          <Form.Item
+            name="testContent"
+            label="Nội dung đề thi"
+            rules={[
+              { max: 2000, message: 'Mô tả không được vượt quá 2000 ký tự!' }
+            ]}
+          >
+            <div className="custom-ckeditor-container">
+              <CKEditor
+                editor={ClassicEditor as any}
+                data={form.getFieldValue('testContent') || ''}
+                config={{
+                  toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
+                  placeholder: 'Nhập nội dung đề thi...',
+                }}
+                onChange={(event, editor) => {
+                  const data = editor.getData();
+                  form.setFieldsValue({ testContent: data });
+                }}
+              />
+            </div>
+          </Form.Item>
+          <Form.Item
+            name="knowledgeRequirement"
+            label="Yêu cầu kiến thức"
+            rules={[
+              { max: 2000, message: 'Mô tả không được vượt quá 2000 ký tự!' }
+            ]}
+          >
+            <div className="custom-ckeditor-container">
+              <CKEditor
+                editor={ClassicEditor as any}
+                data={form.getFieldValue('knowledgeRequirement') || ''}
+                config={{
+                  toolbar: ['heading', '|', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
+                  placeholder: 'Nhập yêu cầu kiến thức về đề thi...',
+                }}
+                onChange={(event, editor) => {
+                  const data = editor.getData();
+                  form.setFieldsValue({ knowledgeRequirement: data });
+                }}
+              />
+            </div>
+          </Form.Item>
+
           <Col span={16}>
             <Form.Item
               name="status"
@@ -2014,7 +2118,7 @@ const MockExamsPage: React.FC = () => {
                 />
               </Col>
               <Col span={8}>
-                <Statistic title="Thời gian" value={`${currentExam.duration} phút`} />
+                <Statistic title="Thời gian" value={`${secondsToMinutes(currentExam.duration)} phút`} />
               </Col>
 
               <Col span={24}>
@@ -2082,8 +2186,16 @@ const MockExamsPage: React.FC = () => {
 
 
               <Col span={24}>
-                <Divider orientation="left">Mô tả</Divider>
-                <div className="exam-description" dangerouslySetInnerHTML={{ __html: currentExam.description || '' }} />
+                <Divider orientation="left">Giới thiệu</Divider>
+                <div className="exam-description" dangerouslySetInnerHTML={{ __html: currentExam.intro || '' }} />
+              </Col>
+              <Col span={24}>
+                <Divider orientation="left">Nội dung đề thi</Divider>
+                <div className="exam-description" dangerouslySetInnerHTML={{ __html: currentExam.testContent || '' }} />
+              </Col>
+              <Col span={24}>
+                <Divider orientation="left">Yêu cầu kiến thức</Divider>
+                <div className="exam-description" dangerouslySetInnerHTML={{ __html: currentExam.knowledgeRequirement || '' }} />
               </Col>
             </Row>
           </div>
@@ -2132,21 +2244,13 @@ const MockExamsPage: React.FC = () => {
                 >
                   <Select placeholder="Chọn môn học">
                     {courses.map(course => (
-                      <Option key={course.id} value={course.id.toString()}>{course.title}</Option>
+                      <Option key={course.id} value={course.id}>{course.title}</Option>
                     ))}
                   </Select>
                 </Form.Item>
 
               </Col>
-              <Col span={8}>
-                <Form.Item
-                  name="point"
-                  label="Điểm cộng"
-                  rules={[{ required: true, message: 'Vui lòng nhập điểm cộng!' }]}
-                >
-                  <Input type="number" placeholder="Nhập điểm cộng" />
-                </Form.Item>
-              </Col>
+
 
             </Row>
             <Row gutter={16}>
@@ -2168,9 +2272,8 @@ const MockExamsPage: React.FC = () => {
                   name="totalQuestion"
                   label="Tổng số câu hỏi"
                   rules={[
-                    { required: true, message: 'Vui lòng nhập số câu hỏi!' },
-                    { type: 'number', min: 1, message: 'Số câu hỏi phải lớn hơn 0!' },
-                    { type: 'number', max: 100, message: 'Số câu hỏi không được vượt quá 100!' }
+                    { required: true, message: 'Vui lòng nhập số câu hỏi!' }
+
                   ]}
                 >
                   <Input type="number" placeholder="Nhập số câu hỏi" />
@@ -2223,7 +2326,7 @@ const MockExamsPage: React.FC = () => {
                   label="Số câu dễ"
                   rules={[
                     { required: true, message: 'Vui lòng nhập số câu dễ!' },
-                    { type: 'number', min: 0, message: 'Số câu dễ không được âm!' },
+
                     ({ getFieldValue }) => ({
                       validator(_, value) {
                         const total = getFieldValue('totalQuestion') || 0;
@@ -2247,7 +2350,7 @@ const MockExamsPage: React.FC = () => {
                   label="Số câu trung bình"
                   rules={[
                     { required: true, message: 'Vui lòng nhập số câu trung bình!' },
-                    { type: 'number', min: 0, message: 'Số câu trung bình không được âm!' },
+
                     ({ getFieldValue }) => ({
                       validator(_, value) {
                         const total = getFieldValue('totalQuestion') || 0;
@@ -2271,7 +2374,7 @@ const MockExamsPage: React.FC = () => {
                   label="Số câu khó"
                   rules={[
                     { required: true, message: 'Vui lòng nhập số câu khó!' },
-                    { type: 'number', min: 0, message: 'Số câu khó không được âm!' },
+
                     ({ getFieldValue }) => ({
                       validator(_, value) {
                         const total = getFieldValue('totalQuestion') || 0;
@@ -2308,9 +2411,17 @@ const MockExamsPage: React.FC = () => {
                 <Form.Item
                   name="price"
                   label="Giá bán (đ)"
-
                 >
-                  <Input type="number" placeholder="Nhập giá bán" />
+                  {currentExam?.discountStatus ? (
+                    <>
+                      <Input type="number" placeholder="Nhập giá bán" disabled />
+                      <div style={{ color: '#ff4d4f', fontSize: '12px', marginTop: '4px' }}>
+                        <Text type="danger">Đề thi đang được áp dụng giảm giá</Text>
+                      </div>
+                    </>
+                  ) : (
+                    <Input type="number" placeholder="Nhập giá bán" />
+                  )}
                 </Form.Item>
               </Col>
               <Col span={8}>
@@ -2318,8 +2429,8 @@ const MockExamsPage: React.FC = () => {
                   name="point"
                   label="Điểm cộng"
                   rules={[
-                    { required: true, message: 'Vui lòng nhập điểm cộng!' },
-                    { type: 'number', min: 0, message: 'Điểm cộng không được âm!' }
+                    { required: true, message: 'Vui lòng nhập điểm cộng!' }
+
                   ]}
                 >
                   <Input type="number" placeholder="Nhập điểm cộng" />
@@ -2362,78 +2473,59 @@ const MockExamsPage: React.FC = () => {
               <Col span={8}></Col>
             </Row>
 
-            <Form.Item
-              name="description"
-              label="Mô tả"
-              rules={[
-                { max: 2000, message: 'Mô tả không được vượt quá 2000 ký tự!' }
-              ]}
-            >
-              <div className="custom-ckeditor-container">
-                <CKEditor
-                  editor={ClassicEditor as any}
-                  data={editForm.getFieldValue('description') || currentExam?.description || ''}
-                  config={{
-                    toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
-                    placeholder: 'Nhập mô tả về đề thi...',
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="imageUrl"
+                  label="Ảnh bìa đề thi"
+                  valuePropName="fileList"
+                  getValueFromEvent={(e) => {
+                    if (Array.isArray(e)) {
+                      return e;
+                    }
+                    return e?.fileList;
                   }}
-                  onChange={(event, editor) => {
-                    const data = editor.getData();
-                    editForm.setFieldsValue({ description: data });
-                  }}
-                />
-              </div>
-            </Form.Item>
-
-            <Form.Item
-              name="imageUrl"
-              label="Ảnh bìa đề thi"
-              valuePropName="fileList"
-              getValueFromEvent={(e) => {
-                if (Array.isArray(e)) {
-                  return e;
-                }
-                return e?.fileList;
-              }}
-            >
-              <Upload
-                name="image"
-                listType="picture-card"
-                maxCount={1}
-                beforeUpload={() => false}
-                accept="image/*"
-                onPreview={async (file) => {
-                  if (!file.url && !file.preview) {
-                    file.preview = await new Promise((resolve) => {
-                      const reader = new FileReader();
-                      reader.readAsDataURL(file.originFileObj as File);
-                      reader.onload = () => resolve(reader.result as string);
-                    });
-                  }
-                  const image = new Image();
-                  image.src = file.url || file.preview || '';
-                  const imgWindow = window.open(file.url || file.preview || '');
-                  imgWindow?.document.write(image.outerHTML);
-                }}
-                customRequest={({ file, onSuccess }) => {
-                  setTimeout(() => {
-                    onSuccess?.("ok");
-                  }, 0);
-                }}
-                onChange={(info) => {
-                  const isImage = info.file.type ? info.file.type.startsWith('image/') : false;
-                  if (!isImage) {
-                    message.error('Bạn chỉ có thể tải lên file ảnh!');
-                  }
-                  return isImage;
-                }}
-              >
-                <div>
-                  <PlusOutlined />
-                  <div style={{ marginTop: 8 }}>Tải ảnh lên</div>
-                </div>
-              </Upload>
-            </Form.Item>
+                >
+                  <Upload
+                    name="image"
+                    listType="picture-card"
+                    maxCount={1}
+                    beforeUpload={() => false}
+                    accept="image/*"
+                    onPreview={async (file) => {
+                      if (!file.url && !file.preview) {
+                        file.preview = await new Promise((resolve) => {
+                          const reader = new FileReader();
+                          reader.readAsDataURL(file.originFileObj as File);
+                          reader.onload = () => resolve(reader.result as string);
+                        });
+                      }
+                      const image = new Image();
+                      image.src = file.url || file.preview || '';
+                      const imgWindow = window.open(file.url || file.preview || '');
+                      imgWindow?.document.write(image.outerHTML);
+                    }}
+                    customRequest={({ file, onSuccess }) => {
+                      setTimeout(() => {
+                        onSuccess?.("ok");
+                      }, 0);
+                    }}
+                    onChange={(info) => {
+                      const isImage = info.file.type ? info.file.type.startsWith('image/') : false;
+                      if (!isImage) {
+                        message.error('Bạn chỉ có thể tải lên file ảnh!');
+                      }
+                      return isImage;
+                    }}
+                  >
+                    <div>
+                      <PlusOutlined />
+                      <div style={{ marginTop: 8 }}>Tải ảnh lên</div>
+                    </div>
+                  </Upload>
+                </Form.Item>
+              </Col>
+            </Row>
           </Form>
         )}
       </Modal>
@@ -2476,13 +2568,13 @@ const MockExamsPage: React.FC = () => {
                     <li>Câu hỏi độ khó trung bình: <strong>{currentExam.mediumQuestion}</strong></li>
                     <li>Câu hỏi độ khó cao: <strong>{currentExam.hardQuestion}</strong></li>
                     <li>Loại câu hỏi: {
-                      typeof currentExam.type === 'string' 
-                        ? currentExam.type 
+                      typeof currentExam.type === 'string'
+                        ? currentExam.type
                         : Array.isArray(currentExam.type)
                           ? (currentExam.type as string[]).map((typeValue: string) => {
-                              const typeInfo = QUESTION_TYPES.find(t => t.value === typeValue);
-                              return typeInfo ? typeInfo.label : typeValue;
-                            }).join(', ')
+                            const typeInfo = QUESTION_TYPES.find(t => t.value === typeValue);
+                            return typeInfo ? typeInfo.label : typeValue;
+                          }).join(', ')
                           : currentExam.type
                     }</li>
                   </ul>
@@ -2805,4 +2897,4 @@ const mockQuestions: Question[] = [
   },
 ];
 
-export default MockExamsPage; 
+export default MockExamsPage;

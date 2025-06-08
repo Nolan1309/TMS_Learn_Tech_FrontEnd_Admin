@@ -458,7 +458,11 @@ const CourseContent: React.FC<CourseContentProps> = ({ courseId }) => {
       chapter_id: parseInt(chapterId),
       duration: 300,
       is_test_excluded: 'EMPTYTEST',
-      status: true
+      status: true,
+      isRequired: false,
+      learningTip: '',
+      keyPoint: '',
+      overviewLesson: ''
     });
     setLessonModalVisible(true);
   };
@@ -474,6 +478,10 @@ const CourseContent: React.FC<CourseContentProps> = ({ courseId }) => {
         topic: lesson.topic || '',
         status: lesson.status,
         is_test_excluded: lesson.isTestExcluded || 'EMPTYTEST',
+        isRequired: lesson.isRequired || false,
+        learningTip: lesson.learningTip || '',
+        keyPoint: lesson.keyPoint || '',
+        overviewLesson: lesson.overviewLesson || '',
       });
       setLessonModalVisible(true);
     } catch (error) {
@@ -495,11 +503,14 @@ const CourseContent: React.FC<CourseContentProps> = ({ courseId }) => {
           title: values.lesson_title,
           chapter_id: values.chapter_id,
           course_id: courseId,
-          // Add other fields as needed
           status: values.status,
           duration: values.duration,
           topic: values.topic || '',
-          isTestExcluded: values.is_test_excluded
+          isTestExcluded: values.is_test_excluded,
+          isRequired: values.isRequired,
+          learningTip: values.learningTip || '',
+          keyPoint: values.keyPoint || '',
+          overviewLesson: values.overviewLesson || ''
         };
         try {
           const response = await fetch(ADMIN_UPDATE_LESSON(editingItem.id), {
@@ -534,11 +545,14 @@ const CourseContent: React.FC<CourseContentProps> = ({ courseId }) => {
           title: values.lesson_title,
           chapter_id: values.chapter_id,
           course_id: courseId,
-          // Add other fields as needed
           status: values.status,
           duration: values.duration,
           topic: values.topic || '',
-          isTestExcluded: values.is_test_excluded
+          isTestExcluded: values.is_test_excluded,
+          isRequired: values.isRequired,
+          learningTip: values.learningTip || '',
+          keyPoint: values.keyPoint || '',
+          overviewLesson: values.overviewLesson || ''
         };
 
         try {
@@ -1586,6 +1600,50 @@ const CourseContent: React.FC<CourseContentProps> = ({ courseId }) => {
           </Form.Item>
 
           <Form.Item
+            name="isRequired"
+            label="Bắt buộc học"
+            valuePropName="checked"
+          >
+            <Switch checkedChildren="Có" unCheckedChildren="Không" />
+          </Form.Item>
+
+          <Form.Item
+            name="learningTip"
+            label="Mẹo học tập"
+          >
+            <TextEditor
+              initialData={lessonForm.getFieldValue('learningTip') || ''}
+              onChange={(data) => {
+                lessonForm.setFieldValue('learningTip', data);
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="keyPoint"
+            label="Điểm chính"
+          >
+            <TextEditor
+              initialData={lessonForm.getFieldValue('keyPoint') || ''}
+              onChange={(data) => {
+                lessonForm.setFieldValue('keyPoint', data);
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="overviewLesson"
+            label="Tổng quan bài học"
+          >
+            <TextEditor
+              initialData={lessonForm.getFieldValue('overviewLesson') || ''}
+              onChange={(data) => {
+                lessonForm.setFieldValue('overviewLesson', data);
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item
             name="chapter_id"
             label="Chương học"
             rules={[{ required: true, message: 'Vui lòng chọn chương học' }]}
@@ -1611,6 +1669,7 @@ const CourseContent: React.FC<CourseContentProps> = ({ courseId }) => {
           >
             <Input type="number" disabled min={1} />
           </Form.Item>
+
           <Form.Item
             name="is_test_excluded"
             label="Bài kiểm tra"

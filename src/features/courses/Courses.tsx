@@ -38,6 +38,7 @@ export interface Course {
   level: string;
   categoryName?: string;
   students?: number;
+  discountStatus?: boolean;
 }
 
 // Course chapter information
@@ -66,6 +67,10 @@ export interface Lesson {
   topic: string;
   course_id: number;
   chapterId: number;
+  isRequired: boolean;
+  learningTip: string;
+  keyPoint: string;
+  overviewLesson: string;
 }
 
 export interface TestExam {
@@ -152,7 +157,7 @@ const ADMIN_GETALL_RESULT = `${process.env.REACT_APP_SERVER_HOST}/api/courses/al
 const ADMIN_GET_COURSE_OF_ACCOUNT = `${process.env.REACT_APP_SERVER_HOST}/api/courses/get-courseDTO-of-account`;
 
 const CoursesPage: React.FC = () => {
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchText, setSearchText] = useState<string>('');
@@ -295,7 +300,8 @@ const CoursesPage: React.FC = () => {
         level: item.level || 'BEGINNER',
         status: item.status,
         categoryName: item.categoryNameLevel3 || '',
-        students: item.countStudent || 0
+        students: item.countStudent || 0,
+        discountStatus: item.discountStatus
       }));
 
       setCourses(mappedCourses);
@@ -312,6 +318,8 @@ const CoursesPage: React.FC = () => {
     fetchCategories();
     fetchCourses();
   }, [page, rowsPerPage, categoryFilter, searchText]);
+
+
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -386,7 +394,8 @@ const CoursesPage: React.FC = () => {
         price: course.price,
         cost: course.cost,
         level: course.level || 'BEGINNER',
-        status: course.status
+        status: course.status,
+        discountStatus: course.discountStatus || false
       });
       setCourseImage(null);
     } else {
@@ -399,7 +408,8 @@ const CoursesPage: React.FC = () => {
         duration: 60,
         type: 'FEE',
         level: 'BEGINNER',
-        course_category_id: categories.length > 0 ? categories[0].id : ''
+        course_category_id: categories.length > 0 ? categories[0].id : '',
+        discountStatus: false
       });
       setCourseImage(null);
     }
@@ -430,7 +440,7 @@ const CoursesPage: React.FC = () => {
         return;
       }
 
-      const { id: accountId , fullname : fullname } = authData;
+      const { id: accountId, fullname: fullname } = authData;
       const token = await authTokenLogin(refreshToken, refresh, navigate);
 
       // Sử dụng FormData thay vì JSON
@@ -460,7 +470,7 @@ const CoursesPage: React.FC = () => {
           },
           body: formData,
         });
-        
+
         if (response.ok) {
           message.success("Thêm khóa học thành công!");
           setIsModalVisible(false);
@@ -570,22 +580,35 @@ const CoursesPage: React.FC = () => {
     }
   };
 
+
   const columns: ColumnsType<Course> = [
+    {
+      title: 'STT',
+      dataIndex: 'stt',
+      key: 'stt',
+      render: (text: string, record: Course, index: number) => index + 1,
+      fixed: 'left',
+      width: 80,
+    },
     {
       title: 'Tên khóa học',
       dataIndex: 'title',
       key: 'title',
+      fixed: 'left',
+      width: 250,
       render: (text: string, record: Course) => <Link to={`/courses/${record.id}`}>{text}</Link>,
     },
     {
       title: 'Danh mục',
       dataIndex: 'categoryName',
       key: 'categoryName',
+      width: 150,
     },
     {
       title: 'Loại khóa học',
       dataIndex: 'type',
       key: 'type',
+      width: 120,
       filters: getUniqueCategories().filter(cat => cat !== '').map(category => ({
         text: category,
         value: category,
@@ -596,16 +619,19 @@ const CoursesPage: React.FC = () => {
       title: 'Cấp độ',
       dataIndex: 'level',
       key: 'level',
+      width: 120,
     },
     {
       title: 'Giảng viên',
       dataIndex: 'author',
       key: 'author',
+      width: 150,
     },
     {
       title: 'Giá bán',
       dataIndex: 'price',
       key: 'price',
+      width: 120,
       render: (price: number) => price.toLocaleString(),
       sorter: (a: Course, b: Course) => a.price - b.price,
     },
@@ -613,28 +639,46 @@ const CoursesPage: React.FC = () => {
       title: 'Giá niêm yết',
       dataIndex: 'cost',
       key: 'cost',
+      width: 120,
     },
     {
       title: 'Học viên',
       dataIndex: 'students',
-      key: 'students'
+      key: 'students',
+      width: 100,
     },
-
+    {
+      title: 'Giảm giá',
+      dataIndex: 'discountStatus',
+      key: 'discountStatus',
+      width: 120,
+      render: (discountStatus: boolean) => {
+        return (
+          <Tag color={discountStatus ? 'volcano' : 'default'}>
+            {discountStatus ? 'Đang giảm giá' : 'Không'}
+          </Tag>
+        );
+      },
+    },
     {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
+      width: 120,
       render: (status: boolean) => {
         return (
           <Tag color={status ? 'green' : 'gold'}>
             {status ? 'Hoạt động' : 'Nháp'}
           </Tag>
+
         );
       },
     },
     {
       title: 'Hành động',
       key: 'action',
+      fixed: 'right',
+      width: 150,
       render: (_: any, record: Course) => (
         <Space size="middle">
           <Button
@@ -700,6 +744,7 @@ const CoursesPage: React.FC = () => {
         dataSource={courses}
         rowKey="id"
         loading={loading}
+        scroll={{ x: 1500 }}
         pagination={{
           current: page + 1, // API uses 0-based indexing, UI uses 1-based
           pageSize: rowsPerPage,
@@ -743,7 +788,7 @@ const CoursesPage: React.FC = () => {
               style={{ flex: 1 }}
             >
               <Select onChange={handleCourseTypeChange}>
-                <Option value="FEE">Có phí</Option>
+                <Option value="FEE">Trả phí</Option>
                 <Option value="FREE">Miễn phí</Option>
               </Select>
             </Form.Item>
@@ -762,7 +807,7 @@ const CoursesPage: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', gap: 16 }}>
-            
+
             <Form.Item
               name="language"
               label="Ngôn ngữ"
@@ -788,8 +833,8 @@ const CoursesPage: React.FC = () => {
               <Input
                 type="number"
                 min={0}
-                disabled={courseType === 'FREE'}
-                placeholder={courseType === 'FREE' ? 'Miễn phí' : ''}
+                disabled={courseType === 'FREE' || form.getFieldValue('discountStatus')}
+                placeholder={courseType === 'FREE' ? 'Miễn phí' : form.getFieldValue('discountStatus') ? 'Đang áp dụng giảm giá' : ''}
               />
             </Form.Item>
 

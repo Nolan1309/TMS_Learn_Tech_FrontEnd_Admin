@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Typography, Table, Button, Space, Card, Input, Tag, Dropdown,
-  Menu, Select, DatePicker, Modal, Form, Tabs, Tooltip,
-  Divider, Badge, Popconfirm, message, Switch, Row, Col, Checkbox, Descriptions, Alert
+  Typography, Table, Button, Space, Card, Input, Tag, Select,
+  DatePicker, Modal, Form, Tabs, Tooltip, Divider, Switch,
+  message, Row, Col, Badge, Popconfirm, Alert, Checkbox, Descriptions
 } from 'antd';
 import {
-  PlusOutlined, DeleteOutlined, EditOutlined, EyeOutlined, ImportOutlined, ExportOutlined
+  PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import useRefreshToken from '../../utils/useRefreshToken';
@@ -213,7 +214,7 @@ const ExamsPage: React.FC = () => {
       const existingSelectedQuestions = questions
         .filter(q => existingQuestionIds.includes(q.id))
         .map(q => ({ id: q.id, level: q.level, type: q.type }));
-      
+
       // Update selected questions to include existing ones
       setSelectedQuestions(prev => {
         // Create a map of current selections to avoid duplicates
@@ -777,7 +778,7 @@ const ExamsPage: React.FC = () => {
           setLoading(false);
           return;
         }
-        
+
         // Instead of making separate DELETE calls, send all selected questions to the backend
         // The backend will handle adding new questions and removing deselected ones
         const response = await fetch(`${ADMIN_ADD_QUESTION_TO_TEST_V2}/${currentExam.id}`, {
@@ -911,13 +912,21 @@ const ExamsPage: React.FC = () => {
       key: 'createdAt',
       render: (text: string) => (
         <Space direction="vertical" size={0}>
-          <span style={{ fontSize: '12px', color: '#888' }}> {new Date(text).toLocaleDateString('vi-VN')}</span>
+          <span style={{ fontSize: '12px', color: '#888' }}>  {new Date(text).toLocaleString('vi-VN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          })}</span>
         </Space>
       ),
     },
     {
-      title: 'Hành động',
-      key: 'action',
+      title: 'Thao tác',
+      key: 'actions',
       render: (_, record) => (
         <Space>
           <Tooltip title="Xem chi tiết">
@@ -925,6 +934,9 @@ const ExamsPage: React.FC = () => {
           </Tooltip>
           <Tooltip title="Chỉnh sửa">
             <Button icon={<EditOutlined />} shape="circle" onClick={() => handleEditExam(record.id)} />
+          </Tooltip>
+          <Tooltip title="Tải về DOCX">
+            <Button icon={<DownloadOutlined />} shape="circle" onClick={() => handleExportDocx(record.id)} />
           </Tooltip>
           <Tooltip title={record.assigned ? "Thêm câu hỏi" : "Bài kiểm tra chưa được phân công"}>
             <Button
@@ -1203,7 +1215,7 @@ const ExamsPage: React.FC = () => {
   const questionRowSelection = {
     type: 'checkbox' as const,
     selectedRowKeys: selectedQuestions.map(q => q.id), // phải map id ra
-  
+
     onSelect: (record: any, selected: boolean) => {
       if (selected) {
         setSelectedQuestions(prev => [...prev, { id: record.id, level: record.level, type: record.type }]);
@@ -1211,7 +1223,7 @@ const ExamsPage: React.FC = () => {
         setSelectedQuestions(prev => prev.filter(q => q.id !== record.id));
       }
     },
-  
+
     onSelectAll: (selected: boolean, selectedRows: any[], changeRows: any[]) => {
       if (selected) {
         const newSelected = changeRows.map(row => ({ id: row.id, level: row.level, type: row.type }));
@@ -1227,60 +1239,6 @@ const ExamsPage: React.FC = () => {
     }
   };
 
-  // Define columns for existing questions
-  const existingQuestionColumns = [
-    {
-      title: 'Câu hỏi',
-      dataIndex: 'content',
-      key: 'content',
-      render: (text: string) => (
-        <div dangerouslySetInnerHTML={{ __html: text }} />
-      )
-    },
-    {
-      title: 'Loại',
-      dataIndex: 'type',
-      key: 'type',
-      width: 120,
-      render: (type: string) => {
-        const typeInfo = QUESTION_TYPES.find(t => t.value === type) ||
-          { value: type, label: type, color: 'default' };
-        return <Tag color={typeInfo.color}>{typeInfo.label}</Tag>;
-      }
-    },
-    {
-      title: 'Độ khó',
-      dataIndex: 'level',
-      key: 'level',
-      width: 100,
-      render: (level: string) => {
-        const levelText = level === '1' ? 'Dễ' : level === '2' ? 'TB' : level === '3' ? 'Khó' : level;
-        const colorMap: { [key: string]: string } = {
-          '1': 'success',
-          '2': 'warning',
-          '3': 'error'
-        };
-        return <Tag color={colorMap[level] || 'default'}>{levelText}</Tag>;
-      }
-    },
-    {
-      title: 'Hành động',
-      key: 'action',
-      width: 100,
-      render: (_: any, record: any) => (
-        <Popconfirm
-          title="Bạn có chắc chắn muốn xóa câu hỏi này khỏi bài kiểm tra?"
-          onConfirm={() => handleRemoveQuestion(record.id)}
-          okText="Có"
-          cancelText="Không"
-        >
-          <Button danger icon={<DeleteOutlined />} size="small">
-            Xóa
-          </Button>
-        </Popconfirm>
-      )
-    }
-  ];
 
   // Add back the fetchLessonDetail function
   const fetchLessonDetail = async (exam: Exam) => {
@@ -1331,7 +1289,7 @@ const ExamsPage: React.FC = () => {
       const data = await response.json();
       console.log("Existing test questions:", data);
       setQuestionTest(data);
-      
+
       // Automatically add existing questions to selectedQuestions
       if (data && data.length > 0) {
         const existingQuestions = data.map((q: { id: number; level: string; type: string }) => ({
@@ -1339,7 +1297,7 @@ const ExamsPage: React.FC = () => {
           level: q.level,
           type: q.type
         }));
-        
+
         setSelectedQuestions(prev => {
           // Create a map to merge without duplicates
           const selectionMap = new Map(prev.map(q => [q.id, q]));
@@ -1381,6 +1339,52 @@ const ExamsPage: React.FC = () => {
     }
 
     return true;
+  };
+
+  const handleExportDocx = async (examId: string) => {
+    try {
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+      if (!token) return;
+
+      const response = await fetch(
+        `${process.env.REACT_APP_SERVER_HOST}/api/tests/export-docx/${examId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        // Get the file as a blob
+        const blob = await response.blob();
+        // Create a local URL for the blob
+        const url = window.URL.createObjectURL(blob);
+        // Create a temporary anchor element
+        const a = document.createElement('a');
+        a.href = url;
+        // Get filename from Content-Disposition or use default
+        const contentDisposition = response.headers.get('Content-Disposition');
+        const filename = contentDisposition ?
+          contentDisposition.split('filename=')[1].replace(/"/g, '') :
+          'exam.docx';
+        a.download = filename;
+        // Trigger download
+        document.body.appendChild(a);
+        a.click();
+        // Cleanup
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        message.success("Tải xuống file DOCX thành công!");
+      } else {
+        const errorText = await response.text();
+        message.error(`Có lỗi xảy ra khi tải xuống file DOCX: ${errorText}`);
+      }
+    } catch (error) {
+      console.error("Error exporting to DOCX:", error);
+      message.error("Có lỗi xảy ra khi tải xuống file DOCX");
+    }
   };
 
   return (
@@ -1822,7 +1826,15 @@ const ExamsPage: React.FC = () => {
                 </Descriptions.Item>
               )}
               <Descriptions.Item label="Ngày tạo">
-                {new Date(currentExam.createdAt).toLocaleDateString('vi-VN')}
+                {new Date(currentExam.createdAt).toLocaleString('vi-VN', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false
+                })}
               </Descriptions.Item>
               <Descriptions.Item label="Cập nhật lần cuối">
                 {currentExam.updatedAt ? new Date(currentExam.updatedAt).toLocaleDateString('vi-VN') : 'Chưa cập nhật'}
@@ -2239,7 +2251,7 @@ const ExamsPage: React.FC = () => {
                   />
                 </div>
               </TabPane>
-            
+
             </Tabs>
           </div>
         )}
@@ -2248,4 +2260,4 @@ const ExamsPage: React.FC = () => {
   );
 };
 
-export default ExamsPage; 
+export default ExamsPage;

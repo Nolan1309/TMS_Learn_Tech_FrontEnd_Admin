@@ -19,17 +19,21 @@ export interface JwtPayload {
   isUser: boolean;
   isHuitStudent: boolean;
   sub: string;
+  AccountId: number;
 }
 
 const Login: React.FC = () => {
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState<string>(() => {
+    // Lấy username từ localStorage nếu có
+    return localStorage.getItem("username") || "";
+  });
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const listenAndSendLoginData = (accountId: number) => {
     // Send login event via WebSocket
-    const socket = new SockJS(`${process.env.REACT_APP_SERVER_HOST || 'http://localhost:8080'}/ws`);
+    const socket = new SockJS(`${process.env.REACT_APP_SERVER_HOST}/ws`);
     const stompClient = new Client({
       webSocketFactory: () => socket,
       debug: (str) => {
@@ -53,10 +57,17 @@ const Login: React.FC = () => {
         destination: "/app/login",
         body: JSON.stringify(data)
       });
+      if (username) {
+        stompClient.publish({
+          destination: "/app/status.login",
+          body: username,
+        });
+      }
     };
 
     stompClient.activate();
   };
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +95,7 @@ const Login: React.FC = () => {
             return;
           } else {
             listenAndSendLoginData(data.responsiveDTOJWT.id);
+            localStorage.setItem("username", data.responsiveDTOJWT.email);
 
             const decodedToken = jwtDecode(data.jwt) as JwtPayload;
             const isAdmin = decodedToken.isAdmin;

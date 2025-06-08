@@ -1,35 +1,3 @@
-/* Courses Styles
-.course-card {
-  margin-bottom: 16px;
-  transition: all 0.3s;
-}
-
-.course-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.course-image {
-  height: 200px;
-  object-fit: cover;
-}
-
-.course-price {
-  font-weight: bold;
-  color: #1890ff;
-}
-
-.course-status-active {
-  color: #52c41a;
-}
-
-.course-status-draft {
-  color: #faad14;
-}
-
-.ck-editor__editable {
-  min-height: 200px;
-}  */
-
 /* Add styling for sticky column headers when scrolling horizontally */
 .ant-table-container {
   overflow-x: auto;
@@ -62,38 +30,37 @@
   box-shadow: inset -10px 0 8px -8px rgba(0, 0, 0, 0.1);
 }
 
-/* Course card styling */
-.courses-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.course-card {
+/* Exam card styling */
+.exam-card {
   width: 300px;
   margin-bottom: 16px;
 }
 
-.course-card .ant-card-meta-title {
+.exam-card .ant-card-meta-title {
   white-space: normal;
   height: 48px;
   overflow: hidden;
 }
 
-.course-card .ant-card-cover img {
+.exam-card .ant-card-cover img {
   height: 160px;
   object-fit: cover;
 }
 
-.course-info {
+.exam-info {
   display: flex;
   justify-content: space-between;
   margin-top: 10px;
 }
 
+/* Action buttons styling */
+.action-buttons .ant-btn {
+  margin-right: 4px;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
-  .course-card {
+  .exam-card {
     width: 100%;
   }
-}
+} 

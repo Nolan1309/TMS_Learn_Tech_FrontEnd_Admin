@@ -1,140 +1,215 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Avatar, Typography, Form, Input, Button, Row, Col, Tabs, Table, List, Tag, message, Upload, Badge, Space } from 'antd';
+import { Card, Avatar, Typography, Form, Input, Button, Row, Col, Tabs, Table, List, Tag, message, Upload, Badge, Space, Spin } from 'antd';
 import { UserOutlined, MailOutlined, PhoneOutlined, LockOutlined, IdcardOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import useRefreshToken from '../../utils/useRefreshToken';
+import { authTokenLogin } from '../../utils';
+import { jwtDecode } from 'jwt-decode';
+import { JwtPayload } from '../auth/Login';
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
 
 interface UserActivity {
-  id: string;
-  action: string;
-  ip: string;
-  device: string;
-  time: string;
+  id: number;
+  activityType: string;
+  description: string;
+  timestamp: string;
+  additionalData: string | null;
+  additionalDataMap: Record<string, any> | null;
 }
 
+type NotificationTopic =
+  | 'REGISTER'
+  | 'PASSWORD'
+  | 'VOUCHER'
+  | 'PAYMENT'
+  | 'SYSTEM'
+  | 'GENERAL'
+  | 'ENROLL_COURSE'
+  | 'ENROLL_EXAM'
+  | 'ENROLL_COMBO'
+  | 'LEARNING'
+  | 'CHAT';
+
 interface Notification {
+  id: number;
+  title: string | null;
+  message: string | null;
+  readStatus: boolean;
+  scheduleTime: string | null;
+  deliveryStatus: 'PENDING' | 'SENT';
+  createdAt: string;
+  topic: NotificationTopic;
+  notificationId: number | null;
+}
+
+interface UserProfile {
   id: string;
-  title: string;
-  description: string;
-  time: string;
-  read: boolean;
-  type: 'system' | 'course' | 'exam' | 'payment';
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  department: string;
+  avatar: string | null;
+  joinDate: string;
+  lastLogin: string;
+  status: string;
 }
 
 const ProfilePage: React.FC = () => {
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
   const [loading, setLoading] = useState<boolean>(true);
-  const [user, setUser] = useState<any>(null);
-  const [activities, setActivities] = useState<UserActivity[]>([]);
+  const [user, setUser] = useState<UserProfile | null>(null); const [activities, setActivities] = useState<UserActivity[]>([]);
+  const [totalActivities, setTotalActivities] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const navigate = useNavigate();
+  const refresh = useRefreshToken();
+  const refreshToken = localStorage.getItem("refreshToken");
 
-  // Giả lập lấy dữ liệu người dùng
+
+  // API endpoint
+  const PROFILE_API = `${process.env.REACT_APP_SERVER_HOST}/api/account`;
+
+  // Fetch user data
   useEffect(() => {
-    setTimeout(() => {
-      const mockUser = {
-        id: '1',
-        name: 'Nguyễn Văn Admin',
-        email: 'admin@example.com',
-        phone: '0912345678',
-        role: 'Administrator',
-        department: 'Quản trị hệ thống',
-        avatar: null,
-        joinDate: '2022-05-15',
-        lastLogin: '2023-06-20 08:45:22',
-      };
+    const fetchUserData = async () => {
+      try {
+        const token = await authTokenLogin(refreshToken, refresh, navigate);
+        const response = await fetch(`${PROFILE_API}/1/admin`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
 
-      const mockActivities: UserActivity[] = [
-        {
-          id: '1',
-          action: 'Đăng nhập vào hệ thống',
-          ip: '192.168.1.1',
-          device: 'Chrome trên Windows',
-          time: '2023-06-20 08:45:22',
-        },
-        {
-          id: '2',
-          action: 'Thêm tài liệu mới',
-          ip: '192.168.1.1',
-          device: 'Chrome trên Windows',
-          time: '2023-06-19 15:32:18',
-        },
-        {
-          id: '3',
-          action: 'Cập nhật khóa học',
-          ip: '192.168.1.1',
-          device: 'Chrome trên Windows',
-          time: '2023-06-18 11:20:05',
-        },
-        {
-          id: '4',
-          action: 'Xóa câu hỏi',
-          ip: '192.168.1.1',
-          device: 'Chrome trên Windows',
-          time: '2023-06-17 09:15:40',
-        },
-        {
-          id: '5',
-          action: 'Đăng nhập vào hệ thống',
-          ip: '42.113.45.78',
-          device: 'Safari trên Mac',
-          time: '2023-06-15 14:05:12',
-        },
-      ];
+        if (!response.ok) {
+          throw new Error('Failed to fetch user data');
+        }
 
-      const mockNotifications: Notification[] = [
-        {
-          id: '1',
-          title: 'Bạn có 3 đề xuất cần duyệt',
-          description: 'Hệ thống đang có 3 đề xuất cần bạn xử lý',
-          time: '2 giờ trước',
-          read: false,
-          type: 'system',
-        },
-        {
-          id: '2',
-          title: 'Có 5 học viên mới đăng ký',
-          description: 'Có 5 học viên mới đăng ký khóa học IELTS',
-          time: '1 ngày trước',
-          read: false,
-          type: 'course',
-        },
-        {
-          id: '3',
-          title: 'Báo cáo doanh thu tháng đã được cập nhật',
-          description: 'Báo cáo doanh thu tháng 6/2023 đã được cập nhật',
-          time: '2 ngày trước',
-          read: true,
-          type: 'payment',
-        },
-        {
-          id: '4',
-          title: 'Bài kiểm tra mới được tạo',
-          description: 'Giáo viên Nguyễn Văn A đã tạo bài kiểm tra mới cho khóa học Toán lớp 12',
-          time: '3 ngày trước',
-          read: true,
-          type: 'exam',
-        },
-      ];
+        const result = await response.json();
 
-      setUser(mockUser);
-      setActivities(mockActivities);
-      setNotifications(mockNotifications);
-      setUnreadCount(mockNotifications.filter(n => !n.read).length);
+        // Map API response to user object
+        const userData = {
+          id: result.data.id.toString(),
+          name: result.data.fullname,
+          email: result.data.email,
+          phone: result.data.phone,
+          role: result.data.role,
+          department: (() => {
+            switch (result.data.roleId) {
+              case 1: return 'Quản trị hệ thống';
+              case 2: return 'Người dùng';
+              case 3: return 'Giảng viên';
+              case 4: return 'Người dùng VIP';
+              case 5: return 'Sinh viên HUIT';
+              default: return 'Không xác định';
+            }
+          })(),
+          avatar: result.data.image,
+          joinDate: new Date(result.data.createdAt).toLocaleDateString('vi-VN'),
+          lastLogin: new Date(result.data.lastLogin).toLocaleString('vi-VN'),
+          status: result.data.status
+        };          // Notifications are now fetched separately
 
-      form.setFieldsValue({
-        name: mockUser.name,
-        email: mockUser.email,
-        phone: mockUser.phone,
-        department: mockUser.department,
-      });
+        setUser(userData);        // Notifications are fetched separately
 
-      setLoading(false);
-    }, 1000);
+        form.setFieldsValue({
+          name: userData.name,
+          email: userData.email,
+          phone: userData.phone,
+          department: userData.department,
+        });
+
+        setLoading(false);
+      } catch (error) {
+        message.error('Failed to fetch user data');
+        console.error('Error fetching user data:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
   }, [form]);
+
+  // Fetch activities
+  const fetchActivities = async (page: number) => {
+    try {
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+      const decodedToken = jwtDecode(token!) as JwtPayload;
+      const userId = decodedToken.AccountId || 1;
+      if (!userId) {
+        message.error('Không tìm thấy thông tin người dùng');
+        return;
+      }
+      const response = await fetch(
+        `${process.env.REACT_APP_SERVER_HOST}/api/activity/account/${userId}?page=${page - 1}&size=${pageSize}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch activities');
+      }
+
+      const result = await response.json();
+      setActivities(result.data.content);
+      setTotalActivities(result.data.totalElements);
+      setCurrentPage(page);
+    } catch (error) {
+      message.error('Failed to fetch activity history');
+      console.error('Error fetching activities:', error);
+    }
+  };
+
+  // Initial activities fetch
+  useEffect(() => {
+    fetchActivities(1);
+  }, []);
+
+  // Fetch notifications
+  const fetchNotifications = async () => {
+    try {
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+      const decodedToken = jwtDecode(token!) as JwtPayload;
+      const userId = decodedToken.AccountId || 1;
+
+      const response = await fetch(
+        `${process.env.REACT_APP_SERVER_HOST}/api/user-notifications/account/${userId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch notifications');
+      }
+
+      const result = await response.json();
+      setNotifications(result.data.content);
+      setUnreadCount(result.data.content.filter((n: Notification) => !n.readStatus).length);
+    } catch (error) {
+      message.error('Failed to fetch notifications');
+      console.error('Error fetching notifications:', error);
+    }
+  };
+
+  // Initial notifications fetch
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
   const handleUpdateProfile = (values: any) => {
     console.log('Updated profile:', values);
@@ -152,17 +227,53 @@ const ProfilePage: React.FC = () => {
     setUnreadCount(0);
     message.success('Đã đánh dấu tất cả thông báo là đã đọc');
   };
+  const getNotificationCategory = (topic: NotificationTopic): string => {
+    switch (topic) {
+      case 'REGISTER':
+        return 'ĐĂNG KÝ TÀI KHOẢN';
+      case 'PASSWORD':
+        return 'ĐỔI MẬT KHẨU';
+      case 'VOUCHER':
+        return 'MÃ GIẢM GIÁ';
+      case 'PAYMENT':
+        return 'THANH TOÁN';
+      case 'SYSTEM':
+        return 'HỆ THỐNG';
+      case 'GENERAL':
+        return 'THÔNG BÁO CHUNG';
+      case 'ENROLL_COURSE':
+        return 'ĐĂNG KÝ KHÓA HỌC';
+      case 'ENROLL_EXAM':
+        return 'ĐĂNG KÝ BÀI KIỂM TRA';
+      case 'ENROLL_COMBO':
+        return 'ĐĂNG KÝ COMBO';
+      case 'LEARNING':
+        return 'HỌC TẬP';
+      case 'CHAT':
+        return 'TRAO ĐỔI';
+      default:
+        return 'Không xác định';
+    }
+  };
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'system':
+  const getNotificationIcon = (topic: NotificationTopic) => {
+    switch (topic) {
+      case 'REGISTER':
+      case 'PASSWORD':
         return <Badge status="processing" />;
-      case 'course':
+      case 'VOUCHER':
+      case 'PAYMENT':
         return <Badge status="success" />;
-      case 'exam':
+      case 'SYSTEM':
+      case 'GENERAL':
         return <Badge status="warning" />;
-      case 'payment':
+      case 'ENROLL_COURSE':
+      case 'ENROLL_EXAM':
+      case 'ENROLL_COMBO':
+      case 'LEARNING':
         return <Badge status="error" />;
+      case 'CHAT':
+        return <Badge status="default" color="#1890ff" />;
       default:
         return <Badge status="default" />;
     }
@@ -186,27 +297,32 @@ const ProfilePage: React.FC = () => {
       }
     },
   };
-
   const activityColumns = [
     {
-      title: 'Hoạt động',
-      dataIndex: 'action',
-      key: 'action',
+      title: 'Loại hoạt động',
+      dataIndex: 'activityType',
+      key: 'activityType',
+      render: (text: string) => {
+        const activityTypes: Record<string, string> = {
+          LOGIN: 'Đăng nhập',
+          LOGOUT: 'Đăng xuất',
+          UPDATE_PROFILE: 'Cập nhật thông tin',
+          CHANGE_PASSWORD: 'Đổi mật khẩu',
+          // Add more activity types as needed
+        };
+        return activityTypes[text] || text;
+      }
     },
     {
-      title: 'Địa chỉ IP',
-      dataIndex: 'ip',
-      key: 'ip',
-    },
-    {
-      title: 'Thiết bị',
-      dataIndex: 'device',
-      key: 'device',
+      title: 'Mô tả',
+      dataIndex: 'description',
+      key: 'description',
     },
     {
       title: 'Thời gian',
-      dataIndex: 'time',
-      key: 'time',
+      dataIndex: 'timestamp',
+      key: 'timestamp',
+      render: (text: string) => new Date(text).toLocaleString('vi-VN'),
     },
   ];
 
@@ -217,47 +333,57 @@ const ProfilePage: React.FC = () => {
   return (
     <div>
       <Title level={2}>Thông tin cá nhân</Title>
-      
+
       <Tabs defaultActiveKey="info">
         <TabPane tab="Thông tin cá nhân" key="info">
           <Row gutter={[24, 24]}>
             <Col xs={24} md={8}>
-              <Card style={{ textAlign: 'center' }}>
-                <Avatar 
-                  size={120} 
-                  icon={<UserOutlined />} 
-                  style={{ backgroundColor: '#1890ff', marginBottom: 16 }}
-                />
-                <Title level={4}>{user.name}</Title>
-                <Text type="secondary">{user.role}</Text>
-                
-                <div style={{ marginTop: 16 }}>
-                  <Upload {...uploadProps}>
-                    <Button icon={<UploadOutlined />}>Thay đổi ảnh đại diện</Button>
-                  </Upload>
-                </div>
-                
-                <div style={{ marginTop: 24, textAlign: 'left' }}>
-                  <p>
-                    <MailOutlined style={{ marginRight: 8 }} />
-                    {user.email}
-                  </p>
-                  <p>
-                    <PhoneOutlined style={{ marginRight: 8 }} />
-                    {user.phone}
-                  </p>
-                  <p>
-                    <IdcardOutlined style={{ marginRight: 8 }} />
-                    {user.department}
-                  </p>
-                  <p>
-                    <UserOutlined style={{ marginRight: 8 }} />
-                    Tham gia từ: {user.joinDate}
-                  </p>
-                </div>
-              </Card>
+              {user ? (
+                <Card style={{ textAlign: 'center' }}>
+                  <Avatar
+                    size={120}
+                    src={user.avatar}
+                    icon={<UserOutlined />}
+                    style={{ backgroundColor: '#1890ff', marginBottom: 16 }}
+                  />
+                  <Title level={4}>{user.name}</Title>
+                  <Text type="secondary">{user.role}</Text>
+
+                  <div style={{ marginTop: 16 }}>
+                    <Upload {...uploadProps}>
+                      <Button icon={<UploadOutlined />}>Thay đổi ảnh đại diện</Button>
+                    </Upload>
+                  </div>
+
+                  <div style={{ marginTop: 24, textAlign: 'left' }}>
+                    <p>
+                      <MailOutlined style={{ marginRight: 8 }} />
+                      {user.email}
+                    </p>
+                    <p>
+                      <PhoneOutlined style={{ marginRight: 8 }} />
+                      {user.phone}
+                    </p>
+                    <p>
+                      <IdcardOutlined style={{ marginRight: 8 }} />
+                      {user.department}
+                    </p>
+                    <p>
+                      <UserOutlined style={{ marginRight: 8 }} />
+                      Tham gia từ: {user.joinDate}
+                    </p>
+                  </div>
+                </Card>
+              ) : (
+                <Card>
+                  <div style={{ textAlign: 'center' }}>
+                    <Spin size="large" />
+                    <p style={{ marginTop: 16 }}>Đang tải thông tin...</p>
+                  </div>
+                </Card>
+              )}
             </Col>
-            
+
             <Col xs={24} md={16}>
               <Card title="Chỉnh sửa thông tin">
                 <Form
@@ -288,7 +414,7 @@ const ProfilePage: React.FC = () => {
                       </Form.Item>
                     </Col>
                   </Row>
-                  
+
                   <Row gutter={16}>
                     <Col span={12}>
                       <Form.Item
@@ -309,7 +435,7 @@ const ProfilePage: React.FC = () => {
                       </Form.Item>
                     </Col>
                   </Row>
-                  
+
                   <Form.Item>
                     <Button type="primary" htmlType="submit">
                       Cập nhật thông tin
@@ -317,7 +443,7 @@ const ProfilePage: React.FC = () => {
                   </Form.Item>
                 </Form>
               </Card>
-              
+
               <Card title="Đổi mật khẩu" style={{ marginTop: 24 }}>
                 <Form
                   form={passwordForm}
@@ -367,7 +493,7 @@ const ProfilePage: React.FC = () => {
                       </Form.Item>
                     </Col>
                   </Row>
-                  
+
                   <Form.Item>
                     <Button type="primary" htmlType="submit">
                       Đổi mật khẩu
@@ -378,18 +504,22 @@ const ProfilePage: React.FC = () => {
             </Col>
           </Row>
         </TabPane>
-        
+
         <TabPane tab="Nhật ký hoạt động" key="activities">
-          <Card>
-            <Table 
-              columns={activityColumns} 
-              dataSource={activities} 
-              rowKey="id"
-              pagination={{ pageSize: 10 }}
-            />
+          <Card>            <Table
+            columns={activityColumns}
+            dataSource={activities}
+            rowKey="id"
+            pagination={{
+              current: currentPage,
+              pageSize: pageSize,
+              total: totalActivities,
+              onChange: (page) => fetchActivities(page),
+            }}
+          />
           </Card>
         </TabPane>
-        
+
         <TabPane tab={
           <span>
             Thông báo {unreadCount > 0 && <Badge count={unreadCount} style={{ marginLeft: 8 }} />}
@@ -416,20 +546,20 @@ const ProfilePage: React.FC = () => {
                     </Button>
                   ]}
                 >
-                  <List.Item.Meta
-                    avatar={getNotificationIcon(item.type)}
+                  <List.Item.Meta avatar={getNotificationIcon(item.topic)}
                     title={
-                      <Space>
-                        <span style={{ fontWeight: item.read ? 'normal' : 'bold' }}>
-                          {item.title}
-                        </span>
-                        {!item.read && <Tag color="blue">Mới</Tag>}
+                      <Space>                        <span style={{ fontWeight: item.readStatus ? 'normal' : 'bold' }}>
+                        {item.title || getNotificationCategory(item.topic)}
+                      </span>
+                        {!item.readStatus && <Tag color="blue">Mới</Tag>}
                       </Space>
                     }
                     description={
                       <div>
-                        <div>{item.description}</div>
-                        <div style={{ marginTop: 4, color: '#999' }}>{item.time}</div>
+                        <div>{item.message || 'Không có nội dung'}</div>
+                        <div style={{ marginTop: 4, color: '#999' }}>
+                          {new Date(item.createdAt).toLocaleString('vi-VN')}
+                        </div>
                       </div>
                     }
                   />
@@ -443,4 +573,4 @@ const ProfilePage: React.FC = () => {
   );
 };
 
-export default ProfilePage; 
+export default ProfilePage;
