@@ -1,26 +1,36 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Layout, 
-  Menu, 
-  Button, 
-  Avatar, 
-  Dropdown, 
-  Space, 
+import {
+  Layout,
+  Menu,
+  Button,
+  Avatar,
+  Dropdown,
+  Space,
   Breadcrumb,
-  Typography
+  Typography,
+  ConfigProvider,
+  theme,
+  Switch,
 } from 'antd';
 import type { MenuProps } from 'antd';
+import logoLight from '../assets/logo-light.png';
+import logoDark from '../assets/logo-dark.png';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
+const { defaultAlgorithm, darkAlgorithm } = theme;
 
-const AdminLayout: React.FC = () => {
+const MainContent: React.FC<{
+  onThemeChange: (checked: boolean) => void;
+  isDarkMode: boolean;
+}> = ({ onThemeChange, isDarkMode }) => {
+  const { token } = theme.useToken();
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  
-  const pathSnippets = location.pathname.split('/').filter(i => i);
+
+  const pathSnippets = location.pathname.split('/').filter((i) => i);
   const breadcrumbNameMap: Record<string, string> = {
     '/': 'Dashboard',
     '/documents': 'Quản lý tài liệu',
@@ -80,10 +90,14 @@ const AdminLayout: React.FC = () => {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Sider trigger={null} collapsible collapsed={collapsed} width={250}>
-        <div style={{ height: 64, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Title level={4} style={{ margin: 0, color: '#fff' }}>
-            {!collapsed ? 'CRM Khóa Học' : 'CRM'}
-          </Title>
+        <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {!collapsed ? (
+            <img src={isDarkMode ? logoDark : logoLight} alt="Logo" style={{ width: '100%', maxHeight: 64, }} />
+          ) : (
+            <Title level={4} style={{ margin: 0, color: '#fff' }}>
+              TMS
+            </Title>
+          )}
         </div>
         <Menu
           theme="dark"
@@ -201,7 +215,7 @@ const AdminLayout: React.FC = () => {
         />
       </Sider>
       <Layout>
-        <Header style={{ padding: 0, background: '#fff', display: 'flex', justifyContent: 'space-between' }}>
+        <Header style={{ padding: 0, background: token.colorBgContainer, display: 'flex', justifyContent: 'space-between' }}>
           <Button
             type="text"
             onClick={() => setCollapsed(!collapsed)}
@@ -209,7 +223,13 @@ const AdminLayout: React.FC = () => {
           >
             {collapsed ? '≡' : '≡'}
           </Button>
-          <div style={{ paddingRight: 24 }}>
+          <div style={{ paddingRight: 24, display: 'flex', alignItems: 'center' }}>
+            <Switch
+              checkedChildren="Dark"
+              unCheckedChildren="Light"
+              onChange={onThemeChange}
+              style={{ marginRight: 16 }}
+            />
             <Dropdown menu={{ items }} trigger={['click']}>
               <Space>
                 <Avatar>A</Avatar>
@@ -223,9 +243,9 @@ const AdminLayout: React.FC = () => {
             margin: '24px 16px',
             padding: 24,
             minHeight: 280,
-            background: '#fff',
-            borderRadius: 4,
-            overflow: 'auto'
+            background: token.colorBgContainer,
+            borderRadius: token.borderRadiusLG,
+            overflow: 'auto',
           }}
         >
           <Breadcrumb style={{ marginBottom: 16 }}>{breadcrumbItems}</Breadcrumb>
@@ -233,6 +253,24 @@ const AdminLayout: React.FC = () => {
         </Content>
       </Layout>
     </Layout>
+  );
+};
+
+const AdminLayout: React.FC = () => {
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  const handleThemeChange = (checked: boolean) => {
+    setIsDarkMode(checked);
+  };
+
+  return (
+    <ConfigProvider
+      theme={{
+        algorithm: isDarkMode ? darkAlgorithm : defaultAlgorithm,
+      }}
+    >
+      <MainContent onThemeChange={handleThemeChange} isDarkMode={isDarkMode} />
+    </ConfigProvider>
   );
 };
 
