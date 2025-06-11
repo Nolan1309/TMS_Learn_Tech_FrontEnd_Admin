@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, JSX } from 'react';
 import {
   Typography, Card, Table, Button, Space, Input, Select,
   Popconfirm, message, Modal, Form, Progress, Tooltip
@@ -15,7 +15,8 @@ interface BackupItem {
   id: string;
   name: string;
   date: string;
-  retention: 'local' | 'cloud';
+  retention: 'local' | 'server';
+  url?: string;
 }
 
 const BackupPage: React.FC = () => {
@@ -26,91 +27,131 @@ const BackupPage: React.FC = () => {
   const [isBackupInProgress, setIsBackupInProgress] = useState<boolean>(false);
   const [backupForm] = Form.useForm();
 
-  // Giả lập dữ liệu
-  const mockBackups: BackupItem[] = [
-    {
-      id: '1',
-      name: 'Backup - 30/10/2023',
-      date: '2023-10-30T02:00:00',
-      retention: 'local'
-    },
-    {
-      id: '2',
-      name: 'Backup - 29/10/2023',
-      date: '2023-10-29T15:45:00',
-      retention: 'cloud'
-    }
-  ];
+  const fetchBackups = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:8080/api/backup/list', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
+        }
+      });
 
-  // Tải dữ liệu
-  useEffect(() => {
-    setTimeout(() => {
-      setBackups(mockBackups);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Network response was not ok: ${response.status} ${errorText}`);
+      }
+
+      const responseData = await response.json();
+      const backupsData: BackupItem[] = responseData.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        date: item.date,
+        retention: item.retention,
+        url: item.url || ''
+      }));
+      setBackups(backupsData);
+    } catch (error) {
+      console.error('Failed to fetch backups:', error);
+      message.error('Không thể tải danh sách bản sao lưu. Vui lòng thử lại sau.');
+    } finally {
       setLoading(false);
-    }, 1000);
-  }, []);
-
-  // Định dạng byte thành đơn vị dễ đọc
-  const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
   };
 
-  // Xử lý tạo bản sao lưu mới
+  useEffect(() => {
+    fetchBackups();
+  }, []);
+
   const handleCreateBackup = () => {
     setIsModalVisible(true);
     backupForm.resetFields();
     backupForm.setFieldsValue({
-      name: `Backup - ${new Date().toLocaleDateString('vi-VN')}`,
-      retention: 'local'
+      name: `Backup - ${new Date().toLocaleDateString('vi-VN')}`
     });
   };
-
   const handleStartBackup = () => {
-    backupForm.validateFields().then((values: { name: string; retention: 'local' | 'cloud' }) => {
-      setIsModalVisible(false);
-      setIsBackupInProgress(true);
-      setBackupProgress(0);
+    backupForm.validateFields().then(async (values: { name: string; retention: 'local' | 'server' }) => {
+      try {
+        setIsModalVisible(false);
+        setIsBackupInProgress(true);
+        setBackupProgress(0);
 
-      // Giả lập tiến trình sao lưu
-      const interval = setInterval(() => {
-        setBackupProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            setIsBackupInProgress(false);
+        const apiUrl = values.retention === 'server'
+          ? 'http://localhost:8080/api/backup/api/dump/remote?host=103.166.143.198&port=3306&user=nolan&password=1234&database=hotrohoctap3'
+          : 'http://localhost:8080/api/backup/api/dump/remote/local?host=103.166.143.198&port=3306&user=nolan&password=1234&database=hotrohoctap3';
 
-            const newBackup: BackupItem = {
-              id: `${backups.length + 1}`,
-              name: values.name,
-              date: new Date().toISOString(),
-              retention: values.retention
-            };
-
-            setBackups([newBackup, ...backups]);
-            message.success('Sao lưu dữ liệu thành công!');
-            return 0;
-          }
-          return prev + 5;
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: values.retention === 'server'
+            ? {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
+            }
+            : {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
+            }
         });
-      }, 300);
-    }).catch((info) => {
-      console.log('Validate Failed:', info);
-    });
-  };
 
-  // Xử lý xóa bản sao lưu
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Network response was not ok: ${response.status} ${errorText}`);
+        }
+
+        if (values.retention === 'server') {
+          const url = await response.text();
+          const newBackup: BackupItem = {
+            id: `${backups.length + 1}`,
+            name: values.name,
+            date: new Date().toISOString(),
+            retention: values.retention,
+            url: url
+          };
+          setBackups([newBackup, ...backups]);
+        } else {
+          const blob = await response.blob();
+          const downloadUrl = window.URL.createObjectURL(blob);
+
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          const fileName = `backup_${new Date().toISOString().slice(0, 10)}.sql`;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          const newBackup: BackupItem = {
+            id: `${backups.length + 1}`,
+            name: values.name,
+            date: new Date().toISOString(),
+            retention: values.retention,
+            url: downloadUrl
+          };
+          setBackups([newBackup, ...backups]);
+        }
+
+        setIsBackupInProgress(false);
+        message.success('Sao lưu dữ liệu thành công!');
+      } catch (error) {
+        console.error('Backup Error:', error);
+        message.error('Sao lưu thất bại: ' + (error instanceof Error ? error.message : 'Vui lòng thử lại'));
+        setIsBackupInProgress(false);
+      }
+    }); // <-- Make sure this is closed properly
+  };  // <-- Close the handleStartBackup function here
+
   const handleDeleteBackup = (id: string) => {
     setBackups(backups.filter(backup => backup.id !== id));
     message.success('Đã xóa bản sao lưu thành công!');
   };
-
-  // Xử lý khôi phục từ bản sao lưu
   const handleRestore = (backup: BackupItem) => {
+    if (!backup.url) {
+      message.error('Không tìm thấy file sao lưu!');
+      return;
+    }
+
     Modal.confirm({
       title: 'Xác nhận khôi phục dữ liệu',
       icon: <ExclamationCircleOutlined />,
@@ -122,10 +163,31 @@ const BackupPage: React.FC = () => {
           <p>Thời gian: {new Date(backup.date).toLocaleString('vi-VN')}</p>
         </div>
       ),
-      onOk() {
-        message.loading('Đang khôi phục dữ liệu...', 3, () => {
+      onOk: async () => {
+        try {
+
+          const backupUrl = backup.url ? encodeURIComponent(backup.url) : '';
+          const apiUrl = `http://localhost:8080/api/backup/api/restore/remote?host=103.166.143.198&port=3306&user=nolan&password=1234&database=hotrohoctap3&backupFileUrl=${backupUrl}`;
+
+          const hide = message.loading('Đang khôi phục dữ liệu...', 0);
+
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
+            }
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText);
+          }
+
+          hide();
           message.success('Khôi phục dữ liệu thành công!');
-        });
+        } catch (error) {
+          message.error('Khôi phục thất bại: ' + (error instanceof Error ? error.message : 'Vui lòng thử lại'));
+        }
       },
       okText: 'Khôi phục',
       cancelText: 'Hủy',
@@ -133,7 +195,6 @@ const BackupPage: React.FC = () => {
     });
   };
 
-  // Định nghĩa các cột cho bảng
   const columns: ColumnsType<BackupItem> = [
     {
       title: 'Tên bản sao lưu',
@@ -153,12 +214,30 @@ const BackupPage: React.FC = () => {
       title: 'Vị trí lưu',
       dataIndex: 'retention',
       key: 'retention',
+      render: (retention: string, record: BackupItem) => (
+        <Space direction="vertical" size={0}>
+          <Text>{retention === 'local' ? 'Máy tính' : 'Server'}</Text>
+          {record.url && (
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              <a href={record.url} target="_blank" rel="noopener noreferrer">
+                Xem file
+              </a>
+            </Text>
+          )}
+        </Space>
+      ),
     },
     {
       title: 'Hành động',
-      key: 'action',
-      render: (_, record) => (
+      key: 'action', render: (_, record) => (
         <Space>
+          <Tooltip title="Khôi phục">
+            <Button
+              icon={<CloudUploadOutlined />}
+              size="small"
+              onClick={() => handleRestore(record)}
+            />
+          </Tooltip>
           <Tooltip title="Xóa">
             <Popconfirm
               title="Bạn có chắc chắn muốn xóa bản sao lưu này?"
@@ -176,7 +255,7 @@ const BackupPage: React.FC = () => {
 
   return (
     <div>
-      <Title level={2}>Sao lưu và khôi phục</Title>
+      <Title level={2}>Sao lưu và khôi phục dữ liệu</Title>
 
       {isBackupInProgress && (
         <Card style={{ marginBottom: 16 }}>
@@ -239,9 +318,9 @@ const BackupPage: React.FC = () => {
             label="Vị trí lưu"
             rules={[{ required: true, message: 'Vui lòng chọn vị trí lưu' }]}
           >
-            <Select>
+            <Select placeholder="Chọn vị trí lưu">
               <Select.Option value="local">Máy tính</Select.Option>
-              <Select.Option value="cloud">Cloud</Select.Option>
+              <Select.Option value="server">Server</Select.Option>
             </Select>
           </Form.Item>
         </Form>
@@ -250,4 +329,5 @@ const BackupPage: React.FC = () => {
   );
 };
 
-export default BackupPage;
+const Backup = BackupPage;
+export default Backup;
