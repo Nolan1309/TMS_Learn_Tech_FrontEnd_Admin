@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Typography, Card, Layout, Button, Space, Tag, Input, List, Select,
   message as antMessage, Modal, Form, Row, Col, Tabs, Badge, Tooltip, Avatar,
-  Divider, Drawer, Menu, Empty, Popconfirm, Spin, Upload, Image, Progress, Alert
+  Divider, Drawer, Menu, Empty, Popconfirm, Spin, Upload, Image, Progress, Alert,
+  InputNumber
 } from 'antd';
 import {
   SendOutlined, DeleteOutlined, EditOutlined, UserOutlined,
@@ -12,7 +13,7 @@ import {
   CheckOutlined, CheckCircleOutlined, PictureOutlined, UploadOutlined,
   FileOutlined, FilePdfOutlined, FileWordOutlined, FileExcelOutlined,
   FileZipOutlined, FileUnknownOutlined, DownloadOutlined, CopyOutlined,
-  BellOutlined
+  BellOutlined, UsergroupAddOutlined, DeleteFilled
 } from '@ant-design/icons';
 import TextArea from 'antd/lib/input/TextArea';
 import SockJS from 'sockjs-client';
@@ -51,7 +52,6 @@ interface Message {
 interface Conversation {
   id: number;
   name: string;
-
   type: 'private' | 'group';
   fromName?: string;
   receivedName?: string;
@@ -61,7 +61,6 @@ interface Conversation {
   avatarReceived?: string;
   fromEmail?: string;
   receivedEmail?: string;
-
   messages: Message[];
   lastMessage?: Message;
   lastMessageTimestamp?: string;
@@ -123,6 +122,15 @@ const MessagesPage: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<UploadFile | null>(null);
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+
+  // State for group creation
+  const [isGroupCreateVisible, setIsGroupCreateVisible] = useState<boolean>(false);
+  const [groupCreateForm] = Form.useForm();
+  const [creatingGroup, setCreatingGroup] = useState<boolean>(false);
+
+  const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState<boolean>(false);
+  const [conversationToDelete, setConversationToDelete] = useState<number | null>(null);
+  const [deletingGroup, setDeletingGroup] = useState<boolean>(false);
 
   // Filter contacts by search text and tab type
   const filteredContacts = useMemo(() => {
@@ -273,7 +281,7 @@ const MessagesPage: React.FC = () => {
 
         const userId = getCurrentUserId();
         if (userId) {
-          
+
           // Subscribe to private messages
           client!.subscribe(`/user/${userId}/queue/messages`, (message) => {
             try {
@@ -291,14 +299,14 @@ const MessagesPage: React.FC = () => {
               if (receivedMsg && receivedMsg.conversationId) {
                 // Kiểm tra xem tin nhắn này có phải do chính người dùng hiện tại gửi không
                 const isFromCurrentUser = receivedMsg.senderId === userId || receivedMsg.fromId === userId;
-                
+
                 // Nếu tin nhắn do chính người dùng hiện tại gửi, không cần xử lý lại
                 // vì đã được thêm vào danh sách tin nhắn khi gửi đi
                 if (isFromCurrentUser) {
                   console.log("Skipping own message received from WebSocket");
                   return;
                 }
-                
+
                 // First update the apiConversations state
                 setApiConversations(prevConversations => {
                   // Create a new array with the updated conversation
@@ -443,17 +451,17 @@ const MessagesPage: React.FC = () => {
                       // Nếu tin nhắn không phải từ người dùng hiện tại và không phải là contact đang được chọn
                       // thì tăng unreadCount
                       const isSelectedContact = selectedContact && selectedContact.id === contact.id;
-                      
+
                       // Kiểm tra xem tin nhắn này đã được xử lý chưa để tránh tăng unreadCount hai lần
-                      const messageAlreadyExists = apiConversations.some(conv => 
-                        conv.id === receivedMsg.conversationId && 
-                        conv.messages && 
+                      const messageAlreadyExists = apiConversations.some(conv =>
+                        conv.id === receivedMsg.conversationId &&
+                        conv.messages &&
                         conv.messages.some(msg => msg.id === receivedMsg.id)
                       );
-                      
+
                       // Chỉ tăng unreadCount nếu tin nhắn mới, không phải từ người dùng hiện tại và không phải là contact đang được chọn
                       const shouldIncreaseUnreadCount = !messageAlreadyExists && !isFromCurrentUser && !isSelectedContact;
-                      
+
                       return {
                         ...contact,
                         lastMessage: receivedMsg,
@@ -469,7 +477,7 @@ const MessagesPage: React.FC = () => {
               console.error('Error processing received message:', error);
             }
           });
-          
+
           // Also subscribe to online status updates for other users
           client!.subscribe('/topic/online-users', (message) => {
             console.log("Received online status update:", message.body);
@@ -500,7 +508,7 @@ const MessagesPage: React.FC = () => {
             }
           });
         }
-      };      
+      };
 
       client.onStompError = (frame) => {
         console.error('STOMP error:', frame);
@@ -705,10 +713,10 @@ const MessagesPage: React.FC = () => {
     setContacts(contacts.map(c => {
       if (c.id === contact.id) {
         return {
-          ...c, 
-          unreadCount: 0, 
+          ...c,
+          unreadCount: 0,
           roleReceiver: contact.roleReceiver,
-          roleSender: contact.roleSender, 
+          roleSender: contact.roleSender,
           lastActive: contact.lastActive,
           avatarReceived: contact.avatar,
           name: contact.name,
@@ -1302,7 +1310,7 @@ const MessagesPage: React.FC = () => {
         senderUsername: username,  // Thêm tên người gửi
         avatarUrl: avatarUrl       // Thêm avatar người gửi
       };
-        
+
       // Create a temporary message to display immediately
       const tempMessage: Message = {
         id: Date.now(),
@@ -1398,30 +1406,30 @@ const MessagesPage: React.FC = () => {
     if (stompClient && stompClient.connected && apiConversations.length > 0) {
       // Lọc ra các cuộc hội thoại nhóm
       const groupConversations = apiConversations.filter(conv => conv.type === 'group');
-      
+
       // Đăng ký lắng nghe cho từng cuộc hội thoại nhóm
       groupConversations.forEach(conversation => {
         const conversationId = conversation.id;
         console.log(`Subscribing to group conversation: ${conversationId}`);
-        
+
         // Đăng ký lắng nghe tin nhắn từ nhóm
         stompClient.subscribe(`/topic/conversation/${conversationId}`, (message) => {
           try {
             console.log(`Received message from group ${conversationId}:`, message.body);
             const receivedMsg = JSON.parse(message.body);
-            
+
             // Xử lý tin nhắn nhóm tương tự như tin nhắn cá nhân
             if (receivedMsg && receivedMsg.conversationId) {
               // Kiểm tra xem tin nhắn này có phải do chính người dùng hiện tại gửi không
               const isFromCurrentUser = receivedMsg.senderId === currentUserId || receivedMsg.fromId === currentUserId;
-              
+
               // Nếu tin nhắn do chính người dùng hiện tại gửi, không cần xử lý lại
               // vì đã được thêm vào danh sách tin nhắn khi gửi đi
               if (isFromCurrentUser) {
                 console.log("Skipping own message received from WebSocket");
                 return;
               }
-              
+
               // First update the apiConversations state
               setApiConversations(prevConversations => {
                 // Create a new array with the updated conversation
@@ -1480,17 +1488,17 @@ const MessagesPage: React.FC = () => {
                     // Nếu tin nhắn không phải từ người dùng hiện tại và không phải là contact đang được chọn
                     // thì tăng unreadCount
                     const isSelectedContact = selectedContact && selectedContact.id === contact.id;
-                    
+
                     // Kiểm tra xem tin nhắn này đã được xử lý chưa để tránh tăng unreadCount hai lần
-                    const messageAlreadyExists = apiConversations.some(conv => 
-                      conv.id === receivedMsg.conversationId && 
-                      conv.messages && 
+                    const messageAlreadyExists = apiConversations.some(conv =>
+                      conv.id === receivedMsg.conversationId &&
+                      conv.messages &&
                       conv.messages.some(msg => msg.id === receivedMsg.id)
                     );
-                    
+
                     // Chỉ tăng unreadCount nếu tin nhắn mới, không phải từ người dùng hiện tại và không phải là contact đang được chọn
                     const shouldIncreaseUnreadCount = !messageAlreadyExists && !isFromCurrentUser && !isSelectedContact;
-                    
+
                     return {
                       ...contact,
                       lastMessage: receivedMsg,
@@ -1509,6 +1517,94 @@ const MessagesPage: React.FC = () => {
       });
     }
   }, [stompClient, apiConversations, currentUserId, selectedContact, selectedConversation]);
+
+  // Add createGroup function
+  const createGroup = async (values: { conversationName: string }) => {
+    setCreatingGroup(true);
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        antMessage.error("Không tìm thấy token xác thực");
+        return;
+      }
+
+      const response = await axios.post('http://localhost:8080/api/conversation/add?conversationName=' + values.conversationName + '&type=group&accountId=' + currentUserId, {
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.data) {
+        antMessage.success('Tạo nhóm trò chuyện thành công');
+        // Refresh conversations list
+        fetchConversations();
+        setIsGroupCreateVisible(false);
+        groupCreateForm.resetFields();
+      }
+    } catch (error) {
+      console.error("Error creating group:", error);
+      antMessage.error("Không thể tạo nhóm trò chuyện");
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
+
+  // Add deleteGroup function
+  const deleteGroup = async (conversationId: number) => {
+    setDeletingGroup(true);
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        antMessage.error("Không tìm thấy token xác thực");
+        return;
+      }
+
+      const response = await axios.delete(`http://localhost:8080/api/conversation/delete?conversationId=${conversationId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.data) {
+        antMessage.success('Xóa nhóm trò chuyện thành công');
+
+        // If the deleted conversation was selected, clear selection
+        if (selectedConversation && selectedConversation.id === conversationId) {
+          setSelectedConversation(null);
+          setSelectedContact(null);
+        }
+
+        // Refresh conversations list
+        fetchConversations();
+      }
+    } catch (error) {
+      console.error("Error deleting group:", error);
+      antMessage.error("Không thể xóa nhóm trò chuyện");
+    } finally {
+      setDeletingGroup(false);
+      setIsDeleteConfirmVisible(false);
+      setConversationToDelete(null);
+    }
+  };
+
+  // Handle delete confirmation
+  const showDeleteConfirm = (conversationId: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent selecting the contact when clicking delete
+    setConversationToDelete(conversationId);
+    setIsDeleteConfirmVisible(true);
+  };
+
+  // Handle group creation
+  const handleCreateGroup = () => {
+    groupCreateForm.validateFields()
+      .then(values => {
+        createGroup(values);
+      })
+      .catch(info => {
+        console.log('Validate Failed:', info);
+      });
+  };
 
   return (
     <div>
@@ -1529,9 +1625,19 @@ const MessagesPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={handleCompose}
               block
-              style={{ marginBottom: 16 }}
+              style={{ marginBottom: 8 }}
             >
               Soạn tin nhắn
+            </Button>
+
+            <Button
+              type="default"
+              icon={<UsergroupAddOutlined />}
+              onClick={() => setIsGroupCreateVisible(true)}
+              block
+              style={{ marginBottom: 16 }}
+            >
+              Tạo nhóm trò chuyện
             </Button>
 
             <Search
@@ -1572,6 +1678,17 @@ const MessagesPage: React.FC = () => {
                   padding: '12px 16px',
                   background: selectedContact?.id === contact.id ? '#f5f5f5' : 'inherit'
                 }}
+                actions={contact.type === 'group' ? [
+                  <Tooltip title="Xóa nhóm">
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteFilled />}
+                      size="small"
+                      onClick={(e) => showDeleteConfirm(parseInt(contact.id), e)}
+                    />
+                  </Tooltip>
+                ] : undefined}
               >
                 <List.Item.Meta
                   avatar={
@@ -1599,10 +1716,10 @@ const MessagesPage: React.FC = () => {
                   description={
                     <>
                       {contact.lastMessage && (
-                        <div style={{ 
-                          whiteSpace: 'nowrap', 
-                          overflow: 'hidden', 
-                          textOverflow: 'ellipsis', 
+                        <div style={{
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
                           maxWidth: '200px',
                           fontWeight: contact.unreadCount > 0 ? 'bold' : 'normal'
                         }}>
@@ -1719,9 +1836,9 @@ const MessagesPage: React.FC = () => {
                                   size="large"
                                 />
                                 {selectedConversation?.type === 'group' && (
-                                  <div style={{ 
-                                    fontSize: '10px', 
-                                    marginTop: '4px', 
+                                  <div style={{
+                                    fontSize: '10px',
+                                    marginTop: '4px',
                                     maxWidth: '60px',
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
@@ -1745,15 +1862,15 @@ const MessagesPage: React.FC = () => {
                             }}>
                               {/* Hiển thị tên người gửi trong nhóm chat */}
                               {selectedConversation?.type === 'group' && !isCurrentUser && (
-                                <div style={{ 
-                                  fontWeight: 'bold', 
-                                  marginBottom: 4, 
+                                <div style={{
+                                  fontWeight: 'bold',
+                                  marginBottom: 4,
                                   color: isCurrentUser ? 'white' : '#1890ff'
                                 }}>
                                   {msg.senderUsername || 'Người dùng'}
                                 </div>
                               )}
-                              
+
                               {/* Show different content based on message type */}
                               {msg.messageType === 'image' && msg.imageUrl ? (
                                 <div style={{ marginBottom: '8px' }}>
@@ -2107,6 +2224,71 @@ const MessagesPage: React.FC = () => {
             <Button icon={<PaperClipOutlined />}>Chọn tệp</Button>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Modal tạo nhóm mới */}
+      <Modal
+        title="Tạo nhóm trò chuyện mới"
+        open={isGroupCreateVisible}
+        onCancel={() => setIsGroupCreateVisible(false)}
+        footer={[
+          <Button key="back" onClick={() => setIsGroupCreateVisible(false)}>
+            Hủy
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            loading={creatingGroup}
+            onClick={handleCreateGroup}
+          >
+            Tạo nhóm
+          </Button>,
+        ]}
+      >
+        <Form
+          form={groupCreateForm}
+          layout="vertical"
+        >
+          <Form.Item
+            name="conversationName"
+            label="Tên nhóm"
+            rules={[{ required: true, message: 'Vui lòng nhập tên nhóm' }]}
+          >
+            <Input placeholder="Nhập tên nhóm trò chuyện" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Modal xác nhận xóa nhóm */}
+      <Modal
+        title="Xác nhận xóa nhóm"
+        open={isDeleteConfirmVisible}
+        onCancel={() => {
+          setIsDeleteConfirmVisible(false);
+          setConversationToDelete(null);
+        }}
+        footer={[
+          <Button
+            key="back"
+            onClick={() => {
+              setIsDeleteConfirmVisible(false);
+              setConversationToDelete(null);
+            }}
+          >
+            Hủy
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            danger
+            loading={deletingGroup}
+            onClick={() => conversationToDelete && deleteGroup(conversationToDelete)}
+          >
+            Xóa nhóm
+          </Button>,
+        ]}
+      >
+        <p>Bạn có chắc chắn muốn xóa nhóm trò chuyện này không? Hành động này không thể hoàn tác.</p>
       </Modal>
     </div>
   );
