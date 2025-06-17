@@ -12,10 +12,12 @@ import {
   ConfigProvider,
   theme,
   Switch,
+  Tag,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import logoLight from '../assets/logo-light.png';
 import logoDark from '../assets/logo-dark.png';
+import { useAuth } from '../contexts/AuthContext';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -29,7 +31,7 @@ const MainContent: React.FC<{
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-
+  const { isAdmin, isTeacher, user, isUser, isUserVip, isHuitStudent, logout } = useAuth();
 
   const pathSnippets = location.pathname.split('/').filter((i) => i);
 
@@ -61,12 +63,15 @@ const MainContent: React.FC<{
   };
 
   const handleLogout = () => {
-    // const username = localStorage.getItem("username");
+    // Call logout from AuthContext
+    logout();
+    // Remove any additional stored values
     localStorage.removeItem("username");
-    localStorage.removeItem("authToken");
-    navigate("/dang-nhap");
+    localStorage.removeItem("authData");
+    localStorage.removeItem("refreshToken");
+    // Redirect to login page
+    navigate("/login");
   };
-
 
   const extraBreadcrumbItems = pathSnippets.map((_, index) => {
     const url = `/${pathSnippets.slice(0, index + 1).join('/')}`;
@@ -95,8 +100,183 @@ const MainContent: React.FC<{
     },
   ];
 
+  // Teacher-specific menu items
+  const teacherMenuItems = [
+    {
+      key: 'documents',
+      label: <Link to="/documents">Quản lý tài liệu</Link>,
+    },
+    {
+      key: 'courses',
+      label: <Link to="/courses">Quản lý khóa học</Link>,
+    },
+    {
+      key: 'question-bank',
+      label: <Link to="/question-bank">Ngân hàng câu hỏi</Link>,
+    },
+    {
+      key: 'exams',
+      label: <Link to="/exams">Quản lý bài kiểm tra</Link>,
+    },
+    {
+      key: 'results',
+      label: <Link to="/results">Quản lý kết quả học tập</Link>,
+    },
+    {
+      key: 'mock-exams',
+      label: <Link to="/mock-exams">Quản lý đề thi thử</Link>,
+    },
+    {
+      key: 'evaluations',
+      label: <Link to="/evaluations">Quản lý đánh giá</Link>,
+    },
+    {
+      key: 'rankings',
+      label: <Link to="/rankings">Quản lý xếp hạng</Link>,
+    },
+    {
+      key: 'comments',
+      label: <Link to="/comments">Quản lý bình luận</Link>,
+    },
+    {
+      key: 'posts',
+      label: <Link to="/posts">Quản lý bài viết</Link>,
+    },
+  ];
 
+  // Admin-specific menu items
+  const adminOnlyMenuItems = [
+    {
+      key: 'packages',
+      label: <Link to="/packages">Quản lý gói</Link>,
+    },
+    {
+      key: 'categories',
+      label: <Link to="/categories">Quản lý danh mục</Link>,
+    },
+    {
+      key: 'accounts',
+      label: <Link to="/accounts">Quản lý tài khoản</Link>,
+    },
+    {
+      key: 'payments',
+      label: <Link to="/payments">Quản lý thanh toán</Link>,
+    },
+    {
+      key: 'discounts',
+      label: <Link to="/discounts">Quản lý giảm giá</Link>,
+    },
+    {
+      key: 'marketing',
+      label: <Link to="/marketing">Quản lý banner</Link>,
+    },
+  ];
 
+  // Helper functions to get menu items based on role
+  const getManagementMenuItems = () => {
+    if (isAdmin) {
+      return [...teacherMenuItems, ...adminOnlyMenuItems]; // Admin can access everything
+    } else if (isTeacher) {
+      return teacherMenuItems; // Teacher can only access teacher items
+    }
+    return []; // Default empty array for users without permission
+  };
+
+  const getReportMenuItems = () => {
+    return [
+      ...(isAdmin || isTeacher ? [
+        {
+          key: 'notifications',
+          label: <Link to="/notifications">Thông báo</Link>,
+        }
+      ] : []),
+      ...(isAdmin ? [
+        {
+          key: 'statistics',
+          label: <Link to="/statistics">Thống kê</Link>,
+        }
+      ] : [])
+    ];
+  };
+
+  const getSupportMenuItems = () => {
+    return [
+      ...(isAdmin ? [
+        {
+          key: 'settings',
+          label: <Link to="/settings">Cài đặt hệ thống</Link>,
+        },
+        {
+          key: 'backup',
+          label: <Link to="/backup">Sao lưu phục hồi</Link>,
+        },
+        {
+          key: 'trash',
+          label: <Link to="/trash">Thùng rác</Link>,
+        }
+      ] : []),
+      ...(isAdmin ? [
+        {
+          key: 'messages',
+          label: <Link to="/messages">Nhắn tin</Link>,
+        }
+      ] : [])
+    ];
+  };
+
+  const menuItems: MenuProps['items'] = [
+    {
+      key: 'dashboard',
+      label: <Link to="/">Dashboard</Link>,
+    }
+  ];
+
+  // Add management section if user has items
+  if (getManagementMenuItems().length > 0) {
+    menuItems.push({
+      key: 'management',
+      label: 'Quản lý',
+      children: getManagementMenuItems(),
+    });
+  }
+
+  // Add report section if user has items
+  if (getReportMenuItems().length > 0) {
+    menuItems.push({
+      key: 'report',
+      label: 'Report',
+      children: getReportMenuItems(),
+    });
+  }
+
+  // Add support section if user has items
+  if (getSupportMenuItems().length > 0) {
+    menuItems.push({
+      key: 'support',
+      label: 'Support',
+      children: getSupportMenuItems(),
+    });
+  }
+
+  // Helper function to get user role display name
+  const getUserRoleDisplay = () => {
+    if (isAdmin) return 'Admin';
+    if (isTeacher) return 'Giáo viên';
+    if (isUser) return 'Người dùng';
+    if (isUserVip) return 'VIP';
+    if (isHuitStudent) return 'Sinh viên HUIT';
+    return 'Khách';
+  };
+
+  // Helper function to get the color for the role tag
+  const getRoleTagColor = () => {
+    if (isAdmin) return 'red';
+    if (isTeacher) return 'green';
+    if (isUserVip) return 'gold';
+    if (isHuitStudent) return 'blue';
+    if (isUser) return 'cyan';
+    return 'default';
+  };
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -115,118 +295,7 @@ const MainContent: React.FC<{
           mode="inline"
           defaultSelectedKeys={['dashboard']}
           selectedKeys={[location.pathname.split('/')[1] || 'dashboard']}
-          items={[
-            {
-              key: 'dashboard',
-              label: <Link to="/">Dashboard</Link>,
-            },
-            {
-              key: 'management',
-              label: 'Quản lý',
-              children: [
-                {
-                  key: 'documents',
-                  label: <Link to="/documents">Quản lý tài liệu</Link>,
-                },
-                {
-                  key: 'courses',
-                  label: <Link to="/courses">Quản lý khóa học</Link>,
-                },
-                {
-                  key: 'packages',
-                  label: <Link to="/packages">Quản lý gói</Link>,
-                },
-                {
-                  key: 'question-bank',
-                  label: <Link to="/question-bank">Ngân hàng câu hỏi</Link>,
-                },
-                {
-                  key: 'exams',
-                  label: <Link to="/exams">Quản lý bài kiểm tra</Link>,
-                },
-                {
-                  key: 'results',
-                  label: <Link to="/results">Quản lý kết quả học tập</Link>,
-                },
-                {
-                  key: 'mock-exams',
-                  label: <Link to="/mock-exams">Quản lý đề thi thử</Link>,
-                },
-                {
-                  key: 'evaluations',
-                  label: <Link to="/evaluations">Quản lý đánh giá</Link>,
-                },
-                {
-                  key: 'rankings',
-                  label: <Link to="/rankings">Quản lý xếp hạng</Link>,
-                },
-                {
-                  key: 'categories',
-                  label: <Link to="/categories">Quản lý danh mục</Link>,
-                },
-                {
-                  key: 'accounts',
-                  label: <Link to="/accounts">Quản lý tài khoản</Link>,
-                },
-                {
-                  key: 'payments',
-                  label: <Link to="/payments">Quản lý thanh toán</Link>,
-                },
-                {
-                  key: 'comments',
-                  label: <Link to="/comments">Quản lý bình luận</Link>,
-                },
-                {
-                  key: 'posts',
-                  label: <Link to="/posts">Quản lý bài viết</Link>,
-                },
-                {
-                  key: 'discounts',
-                  label: <Link to="/discounts">Quản lý giảm giá</Link>,
-                },
-                {
-                  key: 'marketing',
-                  label: <Link to="/marketing">Quản lý banner</Link>,
-                },
-              ],
-            },
-            {
-              key: 'report',
-              label: 'Report',
-              children: [
-                {
-                  key: 'notifications',
-                  label: <Link to="/notifications">Thông báo</Link>,
-                },
-                {
-                  key: 'statistics',
-                  label: <Link to="/statistics">Thống kê</Link>,
-                },
-              ],
-            },
-            {
-              key: 'support',
-              label: 'Support',
-              children: [
-                {
-                  key: 'messages',
-                  label: <Link to="/messages">Nhắn tin</Link>,
-                },
-                {
-                  key: 'settings',
-                  label: <Link to="/settings">Cài đặt hệ thống</Link>,
-                },
-                {
-                  key: 'backup',
-                  label: <Link to="/backup">Sao lưu phục hồi</Link>,
-                },
-                {
-                  key: 'trash',
-                  label: <Link to="/trash">Thùng rác</Link>,
-                },
-              ],
-            },
-          ]}
+          items={menuItems}
         />
       </Sider>
       <Layout>
@@ -245,25 +314,26 @@ const MainContent: React.FC<{
               onChange={onThemeChange}
               style={{ marginRight: 16 }}
             />
+            <Tag color={getRoleTagColor()} style={{ marginRight: 8 }}>
+              {getUserRoleDisplay()}
+            </Tag>
             <Dropdown menu={{ items }} trigger={['click']}>
               <Space>
-                <Avatar>A</Avatar>
-                <span>Admin</span>
+                <Avatar>{user ? user.sub.charAt(0).toUpperCase() : 'A'}</Avatar>
+                <span>{user?.sub || 'Admin'}</span>
               </Space>
             </Dropdown>
           </div>
         </Header>
         <Content
           style={{
-            margin: '24px 16px',
+            margin: '16px',
             padding: 24,
             minHeight: 280,
             background: token.colorBgContainer,
-            borderRadius: token.borderRadiusLG,
-            overflow: 'auto',
           }}
         >
-          <Breadcrumb style={{ marginBottom: 16 }}>{breadcrumbItems}</Breadcrumb>
+          <Breadcrumb style={{ marginBottom: '16px' }}>{breadcrumbItems}</Breadcrumb>
           <Outlet />
         </Content>
       </Layout>

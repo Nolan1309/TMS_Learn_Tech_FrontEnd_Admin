@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import useRefreshToken from '../../utils/useRefreshToken';
 import { authTokenLogin } from '../../utils';
 import { jwtDecode } from 'jwt-decode';
-import { JwtPayload } from '../auth/Login';
+import JwtPayload from '../auth/JwtPayload';
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
@@ -71,7 +71,9 @@ const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const refresh = useRefreshToken();
   const refreshToken = localStorage.getItem("refreshToken");
-
+  
+  const authData = localStorage.getItem("authData") ? JSON.parse(localStorage.getItem("authData")!) : null;
+  const userId = authData?.id;
 
   // API endpoint
   const PROFILE_API = `${process.env.REACT_APP_SERVER_HOST}/api/account`;
@@ -81,7 +83,7 @@ const ProfilePage: React.FC = () => {
     const fetchUserData = async () => {
       try {
         const token = await authTokenLogin(refreshToken, refresh, navigate);
-        const response = await fetch(`${PROFILE_API}/1/admin`, {
+        const response = await fetch(`${PROFILE_API}/${userId}/admin`, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',

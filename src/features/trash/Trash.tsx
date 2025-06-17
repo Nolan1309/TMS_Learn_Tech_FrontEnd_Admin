@@ -7,7 +7,7 @@ import {
 import {
   DeleteOutlined, UndoOutlined, ExclamationCircleOutlined,
   SearchOutlined, FilterOutlined, ClearOutlined,
-  FileTextOutlined, UserOutlined, BookOutlined,
+  FileTextOutlined, BookOutlined,
   FolderOutlined, SettingOutlined, InfoCircleOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -20,11 +20,10 @@ const { confirm } = Modal;
 interface TrashItem {
   id: string;
   name: string;
-  type: 'student' | 'course' | 'document' | 'payment' | 'other';
+  type: 'course' | 'document' | 'other';
   deletedAt: string;
   deletedBy: string;
   expireAt: string;
-  size?: number;
   description?: string;
 }
 
@@ -38,32 +37,13 @@ const TrashPage: React.FC = () => {
   // Giả lập dữ liệu
   const mockTrashItems: TrashItem[] = [
     {
-      id: '1',
-      name: 'Nguyễn Văn A',
-      type: 'student',
-      deletedAt: '2023-10-25T09:15:00',
-      deletedBy: 'Admin',
-      expireAt: '2023-11-25T09:15:00',
-      description: 'Học viên đăng ký khóa học Toán'
-    },
-    {
       id: '2',
       name: 'Khóa học Tiếng Anh cơ bản',
       type: 'course',
       deletedAt: '2023-10-27T14:30:00',
       deletedBy: 'Marketing',
       expireAt: '2023-11-27T14:30:00',
-      size: 250000000, // 250MB
       description: 'Khóa học dành cho người mới bắt đầu'
-    },
-    {
-      id: '3',
-      name: 'Hóa đơn thanh toán #INV-2023-089',
-      type: 'payment',
-      deletedAt: '2023-10-28T10:45:00',
-      deletedBy: 'Finance',
-      expireAt: '2023-11-28T10:45:00',
-      description: 'Hóa đơn thanh toán khóa học của Trần Thị B'
     },
     {
       id: '4',
@@ -72,7 +52,6 @@ const TrashPage: React.FC = () => {
       deletedAt: '2023-10-20T16:20:00',
       deletedBy: 'Teacher',
       expireAt: '2023-11-20T16:20:00',
-      size: 15000000, // 15MB
       description: 'Tài liệu tham khảo môn Vật lý đại cương'
     },
     {
@@ -93,17 +72,6 @@ const TrashPage: React.FC = () => {
       setLoading(false);
     }, 1000);
   }, []);
-
-  // Định dạng byte thành đơn vị dễ đọc
-  const formatBytes = (bytes?: number): string => {
-    if (!bytes || bytes === 0) return '0 Bytes';
-    
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
 
   // Xử lý tìm kiếm
   const handleSearch = (value: string) => {
@@ -243,10 +211,6 @@ const TrashPage: React.FC = () => {
         let color = '';
         
         switch (record.type) {
-          case 'student':
-            icon = <UserOutlined />;
-            color = 'blue';
-            break;
           case 'course':
             icon = <BookOutlined />;
             color = 'green';
@@ -254,10 +218,6 @@ const TrashPage: React.FC = () => {
           case 'document':
             icon = <FileTextOutlined />;
             color = 'purple';
-            break;
-          case 'payment':
-            icon = <FolderOutlined />;
-            color = 'orange';
             break;
           default:
             icon = <FileTextOutlined />;
@@ -281,12 +241,6 @@ const TrashPage: React.FC = () => {
       sorter: (a, b) => a.name.localeCompare(b.name),
     },
     {
-      title: 'Kích thước',
-      key: 'size',
-      render: (_, record) => record.size ? formatBytes(record.size) : 'N/A',
-      sorter: (a, b) => (a.size || 0) - (b.size || 0),
-    },
-    {
       title: 'Đã xóa',
       key: 'deletedAt',
       render: (_, record) => (
@@ -299,26 +253,6 @@ const TrashPage: React.FC = () => {
       ),
       sorter: (a, b) => new Date(a.deletedAt).getTime() - new Date(b.deletedAt).getTime(),
       defaultSortOrder: 'descend',
-    },
-    {
-      title: 'Thời gian còn lại',
-      key: 'expireAt',
-      render: (_, record) => {
-        const now = new Date();
-        const expireDate = new Date(record.expireAt);
-        const daysLeft = Math.ceil((expireDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        
-        let color = 'default';
-        if (daysLeft <= 5) color = 'error';
-        else if (daysLeft <= 15) color = 'warning';
-        
-        return (
-          <Tag color={color}>
-            {daysLeft <= 0 ? 'Hết hạn' : `${daysLeft} ngày`}
-          </Tag>
-        );
-      },
-      sorter: (a, b) => new Date(a.expireAt).getTime() - new Date(b.expireAt).getTime(),
     },
     {
       title: 'Hành động',
@@ -359,7 +293,7 @@ const TrashPage: React.FC = () => {
       />
 
       <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={8}>
+        <Col span={24}>
           <Card>
             <Statistic
               title="Tổng số mục trong thùng rác"
@@ -368,39 +302,13 @@ const TrashPage: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={8}>
-          <Card>
-            <Statistic
-              title="Dung lượng chiếm dụng"
-              value={formatBytes(trashItems.reduce((total, item) => total + (item.size || 0), 0))}
-              prefix={<FolderOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card>
-            <Statistic
-              title="Số mục gần hết hạn (<5 ngày)"
-              value={trashItems.filter(item => {
-                const now = new Date();
-                const expireDate = new Date(item.expireAt);
-                const daysLeft = Math.ceil((expireDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                return daysLeft <= 5;
-              }).length}
-              valueStyle={{ color: '#cf1322' }}
-              prefix={<ExclamationCircleOutlined />}
-            />
-          </Card>
-        </Col>
       </Row>
 
       <Card>
         <Tabs activeKey={activeTabKey} onChange={setActiveTabKey}>
           <TabPane tab="Tất cả" key="all" />
-          <TabPane tab="Học viên" key="student" />
           <TabPane tab="Khóa học" key="course" />
           <TabPane tab="Tài liệu" key="document" />
-          <TabPane tab="Thanh toán" key="payment" />
           <TabPane tab="Khác" key="other" />
         </Tabs>
         
@@ -442,7 +350,6 @@ const TrashPage: React.FC = () => {
               <Select.Option value="date">Sắp xếp theo ngày</Select.Option>
               <Select.Option value="name">Sắp xếp theo tên</Select.Option>
               <Select.Option value="type">Sắp xếp theo loại</Select.Option>
-              <Select.Option value="size">Sắp xếp theo kích thước</Select.Option>
             </Select>
           </Space>
         </Space>
