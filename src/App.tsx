@@ -1,12 +1,18 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 
 // Layout
 import AdminLayout from './layouts/AdminLayout';
-import { UserStatusProvider } from './utils/UserStatusProvider';
 import { Client } from '@stomp/stompjs';
 import SockJS from "sockjs-client";
+
+// Authentication
+import { AuthProvider } from './contexts/AuthContext';
+import { PrivateRoute, AdminRoute, TeacherRoute } from './components/ProtectedRoutes';
+import Unauthorized from './components/Unauthorized';
+
+// Pages
 const Dashboard = React.lazy(() => import('./features/dashboard/Dashboard'));
 const Login = React.lazy(() => import('./features/auth/Login'));
 const Documents = React.lazy(() => import('./features/documents/Documents'));
@@ -36,7 +42,6 @@ const Evaluations = React.lazy(() => import('./features/evaluations/Evaluations'
 const Rankings = React.lazy(() => import('./features/rankings/Rankings'));
 
 function App() {
-
   useEffect(() => {
     const storedUsername = localStorage.getItem("username");
     if (!storedUsername) return;
@@ -63,59 +68,64 @@ function App() {
     };
   }, []);
   
-
-
   return (
-    <UserStatusProvider>
+    <AuthProvider>
       <Router>
         <React.Suspense fallback={<div>Loading...</div>}>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/dang-nhap" element={<Login />} />
+            <Route path="/unauthorized" element={<Unauthorized />} />
 
-            <Route path="/" element={<AdminLayout />}>
-              <Route index element={<Dashboard />} />
-
-              {/* Quản lý */}
-              <Route path="documents" element={<Documents />} />
-              <Route path="courses" element={<Courses />} />
-              <Route path="courses/:id" element={<CourseDetail />} />
-              <Route path="packages" element={<Packages />} />
-
-              <Route path="question-bank" element={<QuestionBank />} />
-              <Route path="exams" element={<Exams />} />
-              <Route path="results" element={<Results />} />
-              <Route path="mock-exams" element={<MockExams />} />
-              <Route path="categories" element={<Categories />} />
-              <Route path="accounts" element={<Accounts />} />
-              <Route path="payments" element={<Payments />} />
-              <Route path="comments" element={<Comments />} />
-              <Route path="posts" element={<Posts />} />
-              <Route path="discounts" element={<Discounts />} />
-              <Route path="marketing" element={<Marketing />} />
-              <Route path="evaluations" element={<Evaluations />} />
-              <Route path="rankings" element={<Rankings />} />
-
-              {/* Report */}
-              <Route path="notifications" element={<Notifications />} />
-              <Route path="statistics" element={<Statistics />} />
-
-              {/* Support */}
-              <Route path="messages" element={<Messages />} />
-              <Route path="settings" element={<Settings />} />
-              <Route path="backup" element={<Backup />} />
-              <Route path="trash" element={<Trash />} />
-
-              {/* Profile */}
-              <Route path="profile" element={<Profile />} />
-
-              {/* Catch all */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+            {/* Base Routes - Access requires authentication as admin or teacher */}
+            <Route element={<PrivateRoute />}>
+              <Route path="/" element={<AdminLayout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="profile" element={<Profile />} />
+              </Route>
             </Route>
+
+            {/* Admin Routes - Only accessible by administrators */}
+            <Route element={<AdminRoute />}>
+              <Route path="/" element={<AdminLayout />}>
+                <Route path="packages" element={<Packages />} />
+                <Route path="categories" element={<Categories />} />
+                <Route path="accounts" element={<Accounts />} />
+                <Route path="payments" element={<Payments />} />
+                <Route path="discounts" element={<Discounts />} />
+                <Route path="marketing" element={<Marketing />} />
+                <Route path="backup" element={<Backup />} />
+                <Route path="trash" element={<Trash />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="statistics" element={<Statistics />} />
+                <Route path="messages" element={<Messages />} />
+                <Route path="notifications" element={<Notifications />} />
+              </Route>
+            </Route>
+
+            {/* Teacher Routes - Can be accessed by teachers and admins */}
+            <Route element={<TeacherRoute />}>
+              <Route path="/" element={<AdminLayout />}>
+                <Route path="documents" element={<Documents />} />
+                <Route path="courses" element={<Courses />} />
+                <Route path="courses/:id" element={<CourseDetail />} />
+                <Route path="question-bank" element={<QuestionBank />} />
+                <Route path="exams" element={<Exams />} />
+                <Route path="results" element={<Results />} />
+                <Route path="mock-exams" element={<MockExams />} />
+                <Route path="comments" element={<Comments />} />
+                <Route path="posts" element={<Posts />} />
+                <Route path="evaluations" element={<Evaluations />} />
+                <Route path="rankings" element={<Rankings />} />
+              </Route>
+            </Route>
+
+            {/* Catch all */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </React.Suspense>
       </Router>
-    </UserStatusProvider>
+    </AuthProvider>
   );
 }
 

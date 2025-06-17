@@ -1,26 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../../assets/assetsLogin/css/fontawesome-all.min.css";
 import "../../assets/assetsLogin/css/iofrm-style.css";
 import "../../assets/assetsLogin/css/iofrm-theme19.css";
 import { useNavigate } from "react-router-dom";
-import Cookies from "js-cookie";
 import { POST_ACCOUNT_LOGIN } from "../../api/api";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./Login.css";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
-import { jwtDecode } from "jwt-decode";
-
-export interface JwtPayload {
-  isAdmin: boolean;
-  isTeacher: boolean;
-  isUser: boolean;
-  isHuitStudent: boolean;
-  sub: string;
-  AccountId: number;
-}
+import { useAuth } from "../../contexts/AuthContext";
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState<string>(() => {
@@ -30,6 +20,18 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const { login, isAuthenticated, isAdmin, isTeacher } = useAuth();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (isAdmin || isTeacher) {
+        navigate("/");
+      } else {
+        navigate("/");
+      }
+    }
+  }, [isAuthenticated, isAdmin, isTeacher, navigate]);
 
   const listenAndSendLoginData = (accountId: number) => {
     // Send login event via WebSocket
@@ -84,31 +86,23 @@ const Login: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
 
-        localStorage.setItem("authToken", data.jwt);
+        // Store token using our auth context
+        login(data.jwt);
+        
+        // Store additional data in localStorage
         localStorage.setItem("authData", JSON.stringify(data.responsiveDTOJWT));
         localStorage.setItem("refreshToken", data.refreshToken);
+        localStorage.setItem("username", data.responsiveDTOJWT.email);
+        
         toast.success("Đăng nhập thành công!");
 
+        // Send login event via WebSocket
+        listenAndSendLoginData(data.responsiveDTOJWT.id);
+        
+        // Redirect to appropriate page after a short delay
         setTimeout(() => {
-          if (!data.jwt) {
-            navigate("/dang-nhap");
-            return;
-          } else {
-            listenAndSendLoginData(data.responsiveDTOJWT.id);
-            localStorage.setItem("username", data.responsiveDTOJWT.email);
-
-            const decodedToken = jwtDecode(data.jwt) as JwtPayload;
-            const isAdmin = decodedToken.isAdmin;
-            const isTeacher = decodedToken.isTeacher;
-            if (isAdmin || isTeacher) {
-              navigate("/admin");
-              return;
-            } else {
-              navigate("/");
-              return;
-            }
-          }
-        }, 2500);
+          navigate("/");
+        }, 1500);
       } else {
         const data = await response.text();
         toast.error(data);

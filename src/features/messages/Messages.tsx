@@ -189,7 +189,7 @@ const MessagesPage: React.FC = () => {
         return;
       }
 
-      const response = await axios.get(`http://localhost:8080/api/chat/conversations/${userId}`, {
+      const response = await axios.get(`${process.env.REACT_APP_SERVER_HOST}/api/chat/conversations/${userId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -267,7 +267,7 @@ const MessagesPage: React.FC = () => {
 
     const connectWebSocket = () => {
       console.log("Connecting to WebSocket...");
-      const socket = new SockJS('http://localhost:8080/ws');
+      const socket = new SockJS(`${process.env.REACT_APP_SERVER_HOST}/ws`);
       client = new Client({
         webSocketFactory: () => socket,
         reconnectDelay: 2000,
@@ -898,7 +898,7 @@ const MessagesPage: React.FC = () => {
       }
 
       // Upload to the API with POST /api/chat/image
-      const response = await axios.post('http://localhost:8080/api/chat/image', formData, {
+      const response = await axios.post(`${process.env.REACT_APP_SERVER_HOST}/api/chat/image`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${token}`
@@ -1214,7 +1214,7 @@ const MessagesPage: React.FC = () => {
       }
 
       // Upload to the API with progress tracking
-      const response = await axios.post('http://localhost:8080/api/chat/file', formData, {
+      const response = await axios.post(`${process.env.REACT_APP_SERVER_HOST}/api/chat/file`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${token}`
@@ -1528,7 +1528,9 @@ const MessagesPage: React.FC = () => {
         return;
       }
 
-      const response = await axios.post('http://localhost:8080/api/conversation/add?conversationName=' + values.conversationName + '&type=group&accountId=' + currentUserId, {
+
+      const response = await axios.post(`${process.env.REACT_APP_SERVER_HOST}/api/conversation/add?conversationName=` + values.conversationName + '&type=group&accountId=' + currentUserId, {
+
       }, {
         headers: {
           Authorization: `Bearer ${token}`
@@ -1560,7 +1562,9 @@ const MessagesPage: React.FC = () => {
         return;
       }
 
-      const response = await axios.delete(`http://localhost:8080/api/conversation/delete?conversationId=${conversationId}`, {
+
+      const response = await axios.delete(`${process.env.REACT_APP_SERVER_HOST}/api/conversation/delete?conversationId=${conversationId}`, {
+
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -2295,4 +2299,3 @@ const MessagesPage: React.FC = () => {
 };
 
 export default MessagesPage;
-

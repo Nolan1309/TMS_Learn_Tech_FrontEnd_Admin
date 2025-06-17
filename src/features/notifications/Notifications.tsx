@@ -24,16 +24,16 @@ interface NotificationItem {
   id: string;
   title: string;
   content: string;
-  type: 'all' | 'individual' | 'group';
+  type: 'system' | 'general';
   status: 'draft' | 'sent' | 'scheduled';
+  recipientTarget: 'all' | 'individual' | 'role';
   recipients?: { id: string; name: string }[];
-  recipientType?: 'all' | 'students' | 'teachers' | 'specific';
+  recipientRole?: 'students' | 'teachers' | 'admins';
   recipientCount: number;
   readCount: number;
   sendDate: string;
   createdAt: string;
   createdBy: string;
-  priority: 'normal' | 'high' | 'urgent';
 }
 
 const Notifications: React.FC = () => {
@@ -52,36 +52,36 @@ const Notifications: React.FC = () => {
       id: '1',
       title: 'Thông báo bảo trì hệ thống',
       content: 'Hệ thống sẽ bảo trì từ 23:00 ngày 30/10/2023 đến 01:00 ngày 31/10/2023.',
-      type: 'all',
+      type: 'system',
       status: 'sent',
+      recipientTarget: 'all',
       recipientCount: 1200,
       readCount: 850,
       sendDate: '2023-10-29T09:00:00',
       createdAt: '2023-10-28T15:30:00',
-      createdBy: 'Admin',
-      priority: 'high'
+      createdBy: 'Admin'
     },
     {
       id: '2',
       title: 'Cập nhật khóa học mới',
       content: 'Chúng tôi vừa cập nhật thêm 5 khóa học mới về lập trình web, mời bạn tham khảo.',
-      type: 'individual',
+      type: 'general',
       status: 'sent',
-      recipientType: 'students',
+      recipientTarget: 'role',
+      recipientRole: 'students',
       recipientCount: 450,
       readCount: 280,
       sendDate: '2023-10-25T14:30:00',
       createdAt: '2023-10-25T10:15:00',
-      createdBy: 'Marketing',
-      priority: 'normal'
+      createdBy: 'Marketing'
     },
     {
       id: '3',
       title: 'Nhắc nhở nộp bài tập',
       content: 'Nhắc nhở học viên nộp bài tập trước 23:59 ngày 31/10/2023.',
-      type: 'group',
+      type: 'general',
       status: 'scheduled',
-      recipientType: 'specific',
+      recipientTarget: 'individual',
       recipients: [
         { id: 'G001', name: 'Lớp Toán cao cấp' },
         { id: 'G002', name: 'Lớp Tiếng Anh IELTS' }
@@ -90,35 +90,34 @@ const Notifications: React.FC = () => {
       readCount: 0,
       sendDate: '2023-10-31T08:00:00',
       createdAt: '2023-10-27T16:45:00',
-      createdBy: 'Teacher',
-      priority: 'urgent'
+      createdBy: 'Teacher'
     },
     {
       id: '4',
       title: 'Thông báo lịch học thay đổi',
       content: 'Lịch học ngày 02/11/2023 được dời sang ngày 03/11/2023.',
-      type: 'group',
+      type: 'system',
       status: 'draft',
-      recipientType: 'teachers',
+      recipientTarget: 'role',
+      recipientRole: 'teachers',
       recipientCount: 25,
       readCount: 0,
       sendDate: '',
       createdAt: '2023-10-30T09:20:00',
-      createdBy: 'Admin',
-      priority: 'high'
+      createdBy: 'Admin'
     },
     {
       id: '5',
       title: 'Chương trình ưu đãi tháng 11',
       content: 'Giảm 20% tất cả khóa học trong tháng 11/2023. Đăng ký ngay!',
-      type: 'all',
+      type: 'general',
       status: 'scheduled',
+      recipientTarget: 'all',
       recipientCount: 1200,
       readCount: 0,
       sendDate: '2023-11-01T07:00:00',
       createdAt: '2023-10-29T13:10:00',
-      createdBy: 'Marketing',
-      priority: 'normal'
+      createdBy: 'Marketing'
     }
   ];
 
@@ -138,17 +137,16 @@ const Notifications: React.FC = () => {
         title: notification.title,
         content: notification.content,
         type: notification.type,
-        recipientType: notification.recipientType || 'all',
-        priority: notification.priority,
+        recipientTarget: notification.recipientTarget,
+        recipientRole: notification.recipientRole,
         sendNow: notification.status === 'sent'
       });
     } else {
       setCurrentNotification(null);
       form.resetFields();
       form.setFieldsValue({
-        type: 'all',
-        recipientType: 'all',
-        priority: 'normal',
+        type: 'general',
+        recipientTarget: 'all',
         sendNow: true
       });
     }
@@ -174,14 +172,14 @@ const Notifications: React.FC = () => {
         content: values.content,
         type: values.type,
         status: status,
-        recipientType: values.type !== 'all' ? values.recipientType : undefined,
+        recipientTarget: values.recipientTarget,
+        recipientRole: values.recipientTarget === 'role' ? values.recipientRole : undefined,
         recipients: currentNotification?.recipients,
-        recipientCount: currentNotification?.recipientCount || (values.type === 'all' ? 1200 : 0),
+        recipientCount: currentNotification?.recipientCount || (values.recipientTarget === 'all' ? 1200 : 0),
         readCount: currentNotification?.readCount || 0,
         sendDate: sendNow ? new Date().toISOString() : (values.sendDate?.toISOString() || ''),
         createdAt: currentNotification ? currentNotification.createdAt : new Date().toISOString(),
-        createdBy: 'Admin',
-        priority: values.priority
+        createdBy: 'Admin'
       };
 
       if (currentNotification) {
@@ -279,18 +277,15 @@ const Notifications: React.FC = () => {
       dataIndex: 'type',
       key: 'type',
       render: (type) => {
-        if (type === 'all') {
-          return <Tag color="blue">Toàn bộ</Tag>;
-        } else if (type === 'individual') {
-          return <Tag color="green">Cá nhân</Tag>;
+        if (type === 'system') {
+          return <Tag color="blue">Hệ thống</Tag>;
         } else {
-          return <Tag color="orange">Nhóm</Tag>;
+          return <Tag color="green">Chung</Tag>;
         }
       },
       filters: [
-        { text: 'Toàn bộ', value: 'all' },
-        { text: 'Cá nhân', value: 'individual' },
-        { text: 'Nhóm', value: 'group' },
+        { text: 'Hệ thống', value: 'system' },
+        { text: 'Chung', value: 'general' },
       ],
       onFilter: (value, record) => record.type === value,
     },
@@ -314,36 +309,20 @@ const Notifications: React.FC = () => {
       onFilter: (value, record) => record.status === value,
     },
     {
-      title: 'Độ ưu tiên',
-      dataIndex: 'priority',
-      key: 'priority',
-      render: (priority) => {
-        if (priority === 'normal') {
-          return <Tag color="blue">Bình thường</Tag>;
-        } else if (priority === 'high') {
-          return <Tag color="orange">Cao</Tag>;
-        } else {
-          return <Tag color="red">Khẩn cấp</Tag>;
-        }
-      },
-      filters: [
-        { text: 'Bình thường', value: 'normal' },
-        { text: 'Cao', value: 'high' },
-        { text: 'Khẩn cấp', value: 'urgent' },
-      ],
-      onFilter: (value, record) => record.priority === value,
-    },
-    {
       title: 'Người nhận',
       key: 'recipients',
       render: (_, record) => (
         <Space direction="vertical" size={0}>
-          {record.type === 'all' ? (
+          {record.recipientTarget === 'all' ? (
             <Text>Tất cả người dùng</Text>
-          ) : record.recipientType === 'students' ? (
-            <Text>Tất cả học viên</Text>
-          ) : record.recipientType === 'teachers' ? (
-            <Text>Tất cả giáo viên</Text>
+          ) : record.recipientTarget === 'role' ? (
+            record.recipientRole === 'students' ? (
+              <Text>Tất cả học viên</Text>
+            ) : record.recipientRole === 'teachers' ? (
+              <Text>Tất cả giáo viên</Text>
+            ) : (
+              <Text>Tất cả quản trị viên</Text>
+            )
           ) : record.recipients ? (
             <Text>{record.recipients.map(r => r.name).join(', ')}</Text>
           ) : (
@@ -459,7 +438,7 @@ const Notifications: React.FC = () => {
                 <Option value="all">Tất cả đối tượng</Option>
                 <Option value="students">Học viên</Option>
                 <Option value="teachers">Giáo viên</Option>
-                <Option value="specific">Nhóm cụ thể</Option>
+                <Option value="admins">Quản trị viên</Option>
               </Select>
             </Space>
           </Space>
@@ -530,52 +509,52 @@ const Notifications: React.FC = () => {
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col span={24}>
               <Form.Item
                 name="type"
                 label="Loại thông báo"
                 rules={[{ required: true, message: 'Vui lòng chọn loại thông báo' }]}
               >
                 <RadioGroup>
-                  <Radio value="all">Toàn bộ</Radio>
-                  <Radio value="individual">Cá nhân</Radio>
-                  <Radio value="group">Nhóm</Radio>
+                  <Radio value="general">Chung</Radio>
+                  <Radio value="system">Hệ thống</Radio>
                 </RadioGroup>
               </Form.Item>
             </Col>
-            <Col span={12}>
+          </Row>
+          <Row gutter={16}>
+            <Col span={24}>
               <Form.Item
-                name="priority"
-                label="Độ ưu tiên"
-                rules={[{ required: true, message: 'Vui lòng chọn độ ưu tiên' }]}
+                name="recipientTarget"
+                label="Đối tượng nhận"
+                rules={[{ required: true, message: 'Vui lòng chọn đối tượng nhận' }]}
               >
                 <RadioGroup>
-                  <Radio value="normal">Bình thường</Radio>
-                  <Radio value="high">Cao</Radio>
-                  <Radio value="urgent">Khẩn cấp</Radio>
+                  <Radio value="all">Toàn bộ</Radio>
+                  <Radio value="role">Theo vai trò</Radio>
+                  <Radio value="individual">Cá nhân</Radio>
                 </RadioGroup>
               </Form.Item>
             </Col>
           </Row>
           <Form.Item
             noStyle
-            shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}
+            shouldUpdate={(prevValues, currentValues) => prevValues.recipientTarget !== currentValues.recipientTarget}
           >
             {({ getFieldValue }) => {
-              const type = getFieldValue('type');
-              return type !== 'all' ? (
+              const recipientTarget = getFieldValue('recipientTarget');
+              return recipientTarget === 'role' ? (
                 <Row gutter={16}>
                   <Col span={24}>
                     <Form.Item
-                      name="recipientType"
-                      label="Đối tượng nhận"
-                      rules={[{ required: true, message: 'Vui lòng chọn đối tượng nhận' }]}
+                      name="recipientRole"
+                      label="Chọn vai trò"
+                      rules={[{ required: true, message: 'Vui lòng chọn vai trò' }]}
                     >
                       <RadioGroup>
-                        <Radio value="all">Tất cả người dùng</Radio>
-                        <Radio value="students">Tất cả học viên</Radio>
-                        <Radio value="teachers">Tất cả giáo viên</Radio>
-                        <Radio value="specific">Chọn nhóm cụ thể</Radio>
+                        <Radio value="students">Học viên</Radio>
+                        <Radio value="teachers">Giáo viên</Radio>
+                        <Radio value="admins">Quản trị viên</Radio>
                       </RadioGroup>
                     </Form.Item>
                   </Col>

@@ -107,3 +107,90 @@ export const authTokenLogin = async (refreshToken: any, refresh: any, navigate: 
 
   return token;
 }
+
+export interface UserToken {
+  AccountId: number;
+  isUserVip: boolean;
+  isHuitStudent: boolean;
+  isAdmin: boolean;
+  isTeacher: boolean;
+  isUser: boolean;
+  sub: string; // email
+  iat: number;
+  exp: number;
+}
+
+export const TOKEN_KEY = 'auth_token';
+
+// Store token in localStorage
+export const setToken = (token: string): void => {
+  localStorage.setItem(TOKEN_KEY, token);
+};
+
+// Get token from localStorage
+export const getToken = (): string | null => {
+  return localStorage.getItem(TOKEN_KEY);
+};
+
+// Remove token from localStorage
+export const removeToken = (): void => {
+  localStorage.removeItem(TOKEN_KEY);
+};
+
+// Decode JWT token
+export const decodeToken = (token: string): UserToken | null => {
+  try {
+    return jwtDecode<UserToken>(token);
+  } catch (error) {
+    console.error('Failed to decode token:', error);
+    return null;
+  }
+};
+
+// Get current user from token
+export const getCurrentUser = (): UserToken | null => {
+  const token = getToken();
+  if (!token) return null;
+  
+  try {
+    const decoded = decodeToken(token);
+    
+    // Check if token is expired
+    if (decoded && decoded.exp * 1000 < Date.now()) {
+      removeToken();
+      return null;
+    }
+    
+    return decoded;
+  } catch (error) {
+    console.error('Failed to get current user:', error);
+    return null;
+  }
+};
+
+// Check if user is authenticated
+export const isAuthenticated = (): boolean => {
+  return getCurrentUser() !== null;
+};
+
+// Check if user has specific role
+export const hasRole = (role: 'admin' | 'teacher' | 'user' | 'vip' | 'huitStudent'): boolean => {
+  const currentUser = getCurrentUser();
+  
+  if (!currentUser) return false;
+  
+  switch (role) {
+    case 'admin':
+      return currentUser.isAdmin;
+    case 'teacher':
+      return currentUser.isTeacher;
+    case 'user':
+      return currentUser.isUser;
+    case 'vip':
+      return currentUser.isUserVip;
+    case 'huitStudent':
+      return currentUser.isHuitStudent;
+    default:
+      return false;
+  }
+};

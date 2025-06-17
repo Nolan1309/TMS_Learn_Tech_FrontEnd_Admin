@@ -30,7 +30,9 @@ const BackupPage: React.FC = () => {
   const fetchBackups = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/api/backup/list', {
+
+      const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/backup/list`, {
+
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -79,9 +81,8 @@ const BackupPage: React.FC = () => {
         setBackupProgress(0);
 
         const apiUrl = values.retention === 'server'
-          ? 'http://localhost:8080/api/backup/api/dump/remote?host=103.166.143.198&port=3306&user=nolan&password=1234&database=hotrohoctap3'
-          : 'http://localhost:8080/api/backup/api/dump/remote/local?host=103.166.143.198&port=3306&user=nolan&password=1234&database=hotrohoctap3';
-
+          ? `${process.env.REACT_APP_SERVER_HOST}/api/backup/api/dump/remote?host=103.166.143.198&port=3306&user=nolan&password=1234&database=hotrohoctap3`
+          : `${process.env.REACT_APP_SERVER_HOST}/api/backup/api/dump/remote/local?host=103.166.143.198&port=3306&user=nolan&password=1234&database=hotrohoctap3`;
         const response = await fetch(apiUrl, {
           method: 'GET',
           headers: values.retention === 'server'
@@ -167,8 +168,7 @@ const BackupPage: React.FC = () => {
         try {
 
           const backupUrl = backup.url ? encodeURIComponent(backup.url) : '';
-          const apiUrl = `http://localhost:8080/api/backup/api/restore/remote?host=103.166.143.198&port=3306&user=nolan&password=1234&database=hotrohoctap3&backupFileUrl=${backupUrl}`;
-
+          const apiUrl = `${process.env.REACT_APP_SERVER_HOST}/api/backup/api/restore/remote?host=103.166.143.198&port=3306&user=nolan&password=1234&database=hotrohoctap3&backupFileUrl=${backupUrl}`;
           const hide = message.loading('Đang khôi phục dữ liệu...', 0);
 
           const response = await fetch(apiUrl, {
