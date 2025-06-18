@@ -120,7 +120,7 @@ export interface UserToken {
   exp: number;
 }
 
-export const TOKEN_KEY = 'auth_token';
+export const TOKEN_KEY = 'authToken';
 
 // Store token in localStorage
 export const setToken = (token: string): void => {
