@@ -58,8 +58,6 @@ interface CourseStudent {
   progress: number;
   completionStatus: 'not_started' | 'in_progress' | 'completed';
   score: number;
-  lastActivity: string;
-  totalTimeSpent: number; // in minutes
 }
 
 // Add interface for Course
@@ -265,9 +263,7 @@ const ResultsPage: React.FC = () => {
       enrollmentDate: '2023-09-15T08:30:00',
       progress: 85,
       completionStatus: 'in_progress',
-      score: 78,
-      lastActivity: '2023-10-25T14:30:00',
-      totalTimeSpent: 1240
+      score: 78
     },
     {
       id: 'CS002',
@@ -279,9 +275,7 @@ const ResultsPage: React.FC = () => {
       enrollmentDate: '2023-08-20T10:15:00',
       progress: 92,
       completionStatus: 'completed',
-      score: 92,
-      lastActivity: '2023-10-24T09:45:00',
-      totalTimeSpent: 2160
+      score: 92
     },
     {
       id: 'CS003',
@@ -294,9 +288,7 @@ const ResultsPage: React.FC = () => {
       enrollmentDate: '2023-09-05T13:20:00',
       progress: 45,
       completionStatus: 'in_progress',
-      score: 65,
-      lastActivity: '2023-10-23T16:30:00',
-      totalTimeSpent: 780
+      score: 65
     },
     {
       id: 'CS004',
@@ -308,9 +300,7 @@ const ResultsPage: React.FC = () => {
       enrollmentDate: '2023-10-01T09:00:00',
       progress: 15,
       completionStatus: 'in_progress',
-      score: 60,
-      lastActivity: '2023-10-22T11:15:00',
-      totalTimeSpent: 320
+      score: 60
     },
     {
       id: 'CS005',
@@ -322,9 +312,7 @@ const ResultsPage: React.FC = () => {
       enrollmentDate: '2023-09-18T14:30:00',
       progress: 5,
       completionStatus: 'not_started',
-      score: 0,
-      lastActivity: '2023-10-18T10:20:00',
-      totalTimeSpent: 60
+      score: 0
     }
   ];
 
@@ -370,13 +358,6 @@ const ResultsPage: React.FC = () => {
 
   const downloadResults = () => {
     message.success('Đang tải xuống kết quả...');
-  };
-
-  // Format time spent in hours and minutes
-  const formatTimeSpent = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
   };
 
   // Get status tag for course completion
@@ -1058,9 +1039,6 @@ const ResultsPage: React.FC = () => {
                     <Descriptions.Item label="Tên khóa học" span={2}>{selectedStudent.courseTitle}</Descriptions.Item>
                     <Descriptions.Item label="Trạng thái">
                       {getCourseStatusTag(selectedStudent.completionStatus)}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Thời gian học">
-                      {formatTimeSpent(selectedStudent.totalTimeSpent)}
                     </Descriptions.Item>
                     <Descriptions.Item label="Tiến độ" span={2}>
                       <Space direction="vertical" style={{ width: '100%' }}>
