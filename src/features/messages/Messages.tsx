@@ -1528,7 +1528,9 @@ const MessagesPage: React.FC = () => {
         return;
       }
 
+
       const response = await axios.post(`${process.env.REACT_APP_SERVER_HOST}/api/conversation/add?conversationName=` + values.conversationName + '&type=group&accountId=' + currentUserId, {
+
       }, {
         headers: {
           Authorization: `Bearer ${token}`
@@ -1560,7 +1562,9 @@ const MessagesPage: React.FC = () => {
         return;
       }
 
+
       const response = await axios.delete(`${process.env.REACT_APP_SERVER_HOST}/api/conversation/delete?conversationId=${conversationId}`, {
+
         headers: {
           Authorization: `Bearer ${token}`
         }
