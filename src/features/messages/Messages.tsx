@@ -21,7 +21,7 @@ import { Client } from '@stomp/stompjs';
 import axios from 'axios';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import type { RcFile } from 'antd/es/upload';
-import { useUserStatus } from '../../utils/UserStatusProvider';
+import { useUserStatus, UserStatusProvider } from '../../utils/UserStatusProvider';
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
@@ -2298,4 +2298,10 @@ const MessagesPage: React.FC = () => {
   );
 };
 
-export default MessagesPage;
+const MessagesPageWithProvider: React.FC = () => (
+  <UserStatusProvider>
+    <MessagesPage />
+  </UserStatusProvider>
+);
+
+export default MessagesPageWithProvider;

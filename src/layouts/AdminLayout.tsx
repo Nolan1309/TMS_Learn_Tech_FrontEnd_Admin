@@ -56,7 +56,7 @@ const MainContent: React.FC<{
     '/messages': 'Nhắn tin',
     '/settings': 'Cài đặt hệ thống',
     '/backup': 'Sao lưu phục hồi',
-    '/trash': 'Thùng rác',
+    // '/trash': 'Thùng rác',
     '/profile': 'Thông tin cá nhân',
     '/evaluations': 'Quản lý đánh giá',
     '/rankings': 'Quản lý xếp hạng',
@@ -91,7 +91,7 @@ const MainContent: React.FC<{
   const items: MenuProps['items'] = [
     {
       key: 'profile',
-      label: <Link to="/profile">Thông tin cá nhân</Link>,
+      label: <Link to="/admin/profile">Thông tin cá nhân</Link>,
     },
     {
       key: 'logout',
@@ -104,43 +104,43 @@ const MainContent: React.FC<{
   const teacherMenuItems = [
     {
       key: 'documents',
-      label: <Link to="/documents">Quản lý tài liệu</Link>,
+      label: <Link to="/admin/documents">Quản lý tài liệu</Link>,
     },
     {
       key: 'courses',
-      label: <Link to="/courses">Quản lý khóa học</Link>,
+      label: <Link to="/admin/courses">Quản lý khóa học</Link>,
     },
     {
       key: 'question-bank',
-      label: <Link to="/question-bank">Ngân hàng câu hỏi</Link>,
+      label: <Link to="/admin/question-bank">Ngân hàng câu hỏi</Link>,
     },
     {
       key: 'exams',
-      label: <Link to="/exams">Quản lý bài kiểm tra</Link>,
+      label: <Link to="/admin/exams">Quản lý bài kiểm tra</Link>,
     },
     {
       key: 'results',
-      label: <Link to="/results">Quản lý kết quả học tập</Link>,
+      label: <Link to="/admin/results">Quản lý kết quả học tập</Link>,
     },
     {
       key: 'mock-exams',
-      label: <Link to="/mock-exams">Quản lý đề thi thử</Link>,
+      label: <Link to="/admin/mock-exams">Quản lý đề thi thử</Link>,
     },
     {
       key: 'evaluations',
-      label: <Link to="/evaluations">Quản lý đánh giá</Link>,
+      label: <Link to="/admin/evaluations">Quản lý đánh giá</Link>,
     },
     {
       key: 'rankings',
-      label: <Link to="/rankings">Quản lý xếp hạng</Link>,
+      label: <Link to="/admin/rankings">Quản lý xếp hạng</Link>,
     },
     {
       key: 'comments',
-      label: <Link to="/comments">Quản lý bình luận</Link>,
+      label: <Link to="/admin/comments">Quản lý bình luận</Link>,
     },
     {
       key: 'posts',
-      label: <Link to="/posts">Quản lý bài viết</Link>,
+      label: <Link to="/admin/posts">Quản lý bài viết</Link>,
     },
   ];
 
@@ -148,27 +148,27 @@ const MainContent: React.FC<{
   const adminOnlyMenuItems = [
     {
       key: 'packages',
-      label: <Link to="/packages">Quản lý gói</Link>,
+      label: <Link to="/admin/packages">Quản lý gói</Link>,
     },
     {
       key: 'categories',
-      label: <Link to="/categories">Quản lý danh mục</Link>,
+      label: <Link to="/admin/categories">Quản lý danh mục</Link>,
     },
     {
       key: 'accounts',
-      label: <Link to="/accounts">Quản lý tài khoản</Link>,
+      label: <Link to="/admin/accounts">Quản lý tài khoản</Link>,
     },
     {
       key: 'payments',
-      label: <Link to="/payments">Quản lý thanh toán</Link>,
+      label: <Link to="/admin/payments">Quản lý thanh toán</Link>,
     },
     {
       key: 'discounts',
-      label: <Link to="/discounts">Quản lý giảm giá</Link>,
+      label: <Link to="/admin/discounts">Quản lý giảm giá</Link>,
     },
     {
       key: 'marketing',
-      label: <Link to="/marketing">Quản lý banner</Link>,
+      label: <Link to="/admin/marketing">Quản lý banner</Link>,
     },
   ];
 
@@ -187,13 +187,13 @@ const MainContent: React.FC<{
       ...(isAdmin || isTeacher ? [
         {
           key: 'notifications',
-          label: <Link to="/notifications">Thông báo</Link>,
+          label: <Link to="/admin/notifications">Thông báo</Link>,
         }
       ] : []),
       ...(isAdmin ? [
         {
           key: 'statistics',
-          label: <Link to="/statistics">Thống kê</Link>,
+          label: <Link to="/admin/statistics">Thống kê</Link>,
         }
       ] : [])
     ];
@@ -204,21 +204,21 @@ const MainContent: React.FC<{
       ...(isAdmin ? [
         {
           key: 'settings',
-          label: <Link to="/settings">Cài đặt hệ thống</Link>,
+          label: <Link to="/admin/settings">Cài đặt hệ thống</Link>,
         },
         {
           key: 'backup',
-          label: <Link to="/backup">Sao lưu phục hồi</Link>,
+          label: <Link to="/admin/backup">Sao lưu phục hồi</Link>,
         },
-        {
-          key: 'trash',
-          label: <Link to="/trash">Thùng rác</Link>,
-        }
+        // {
+        //   key: 'trash',
+        //   label: <Link to="/trash">Thùng rác</Link>,
+        // }
       ] : []),
       ...(isAdmin ? [
         {
           key: 'messages',
-          label: <Link to="/messages">Nhắn tin</Link>,
+          label: <Link to="/admin/messages">Nhắn tin</Link>,
         }
       ] : [])
     ];
@@ -227,7 +227,7 @@ const MainContent: React.FC<{
   const menuItems: MenuProps['items'] = [
     {
       key: 'dashboard',
-      label: <Link to="/">Dashboard</Link>,
+      label: <Link to="/admin">Dashboard</Link>,
     }
   ];
 
