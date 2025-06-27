@@ -34,7 +34,7 @@ const Marketing = React.lazy(() => import('./features/marketing/Marketing'));
 const Notifications = React.lazy(() => import('./features/notifications/Notifications'));
 const Messages = React.lazy(() => import('./features/messages/Messages'));
 const Backup = React.lazy(() => import('./features/backup/Backup'));
-const Trash = React.lazy(() => import('./features/trash/Trash'));
+// const Trash = React.lazy(() => import('./features/trash/Trash'));
 const Profile = React.lazy(() => import('./features/profile/Profile'));
 const Settings = React.lazy(() => import('./features/settings/Settings'));
 const Statistics = React.lazy(() => import('./features/statistics/Statistics'));
@@ -45,7 +45,7 @@ function App() {
   useEffect(() => {
     const storedUsername = localStorage.getItem("username");
     if (!storedUsername) return;
-  
+
     const socket = new SockJS(`${process.env.REACT_APP_SERVER_HOST}/ws`);
     const client = new Client({
       webSocketFactory: () => socket,
@@ -53,21 +53,21 @@ function App() {
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
     });
-  
+
     client.onConnect = () => {
       client.publish({
         destination: "/app/status.login",
         body: storedUsername,
       });
     };
-  
+
     client.activate();
-  
+
     return () => {
       client.deactivate();
     };
   }, []);
-  
+
   return (
     <AuthProvider>
       <Router>
@@ -79,7 +79,7 @@ function App() {
 
             {/* Base Routes - Access requires authentication as admin or teacher */}
             <Route element={<PrivateRoute />}>
-              <Route path="/" element={<AdminLayout />}>
+              <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="profile" element={<Profile />} />
               </Route>
@@ -87,7 +87,7 @@ function App() {
 
             {/* Admin Routes - Only accessible by administrators */}
             <Route element={<AdminRoute />}>
-              <Route path="/" element={<AdminLayout />}>
+              <Route path="/admin" element={<AdminLayout />}>
                 <Route path="packages" element={<Packages />} />
                 <Route path="categories" element={<Categories />} />
                 <Route path="accounts" element={<Accounts />} />
@@ -95,7 +95,7 @@ function App() {
                 <Route path="discounts" element={<Discounts />} />
                 <Route path="marketing" element={<Marketing />} />
                 <Route path="backup" element={<Backup />} />
-                <Route path="trash" element={<Trash />} />
+                {/* <Route path="trash" element={<Trash />} /> */}
                 <Route path="settings" element={<Settings />} />
                 <Route path="statistics" element={<Statistics />} />
                 <Route path="messages" element={<Messages />} />
@@ -105,7 +105,7 @@ function App() {
 
             {/* Teacher Routes - Can be accessed by teachers and admins */}
             <Route element={<TeacherRoute />}>
-              <Route path="/" element={<AdminLayout />}>
+              <Route path="/admin" element={<AdminLayout />}>
                 <Route path="documents" element={<Documents />} />
                 <Route path="courses" element={<Courses />} />
                 <Route path="courses/:id" element={<CourseDetail />} />
@@ -121,7 +121,7 @@ function App() {
             </Route>
 
             {/* Catch all */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>
         </React.Suspense>
       </Router>

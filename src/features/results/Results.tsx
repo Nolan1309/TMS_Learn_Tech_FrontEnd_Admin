@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Typography, Table, Button, Space, Card, Input, Tag, Select, 
-  DatePicker, Tabs, Tooltip, Divider, Badge, Popconfirm, 
+import {
+  Typography, Table, Button, Space, Card, Input, Tag, Select,
+  DatePicker, Tabs, Tooltip, Divider, Badge, Popconfirm,
   Statistic, Row, Col, Progress, Avatar, message, Radio,
   Modal, Descriptions, List, Timeline
 } from 'antd';
-import { 
-  SearchOutlined, DeleteOutlined, EyeOutlined, DownloadOutlined, 
+import {
+  SearchOutlined, DeleteOutlined, EyeOutlined, DownloadOutlined,
   FileExcelOutlined, FilePdfOutlined, UserOutlined, ClockCircleOutlined,
   CheckCircleOutlined, CloseCircleOutlined, TrophyOutlined,
   ExportOutlined, FilterOutlined, SortAscendingOutlined,
@@ -14,6 +14,10 @@ import {
   CalendarOutlined, ReadOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import axios from 'axios';
+import { authTokenLogin, refreshToken } from '../../utils/auth';
+import { useNavigate } from 'react-router-dom';
+import useRefreshToken from '../../utils/useRefreshToken';
 
 const { Title, Paragraph, Text } = Typography;
 const { Search } = Input;
@@ -21,43 +25,103 @@ const { Option } = Select;
 const { TabPane } = Tabs;
 
 interface TestResult {
-  id: string;
-  studentId: string;
-  studentName: string;
-  studentEmail: string;
+  testId?: number;
+  id?: string;
+  studentId?: string;
+  studentName?: string;
+  studentEmail?: string;
   avatar?: string;
-  examId: string;
-  examTitle: string;
-  subject: string;
-  score: number;
-  maxScore: number;
-  percentageScore: number;
-  correctAnswers: number;
-  totalQuestions: number;
-  startTime: string;
-  endTime: string;
-  duration: number;
-  status: 'completed' | 'passed' | 'failed';
+  examId?: string;
+  title?: string;
+  examTitle?: string;
+  description?: string;
+  subject?: string;
+  score?: number;
+  maxScore?: number;
+  percentageScore?: number;
+  correctAnswers?: number;
+  totalQuestion?: number;
+  totalQuestions?: number;
+  startTime?: string;
+  endTime?: string;
+  duration?: number;
+  status?: 'completed' | 'passed' | 'failed';
   reviewedBy?: string;
   reviewedAt?: string;
   reviewComments?: string;
-  courseId?: string;
+  courseId?: string | number;
   courseTitle?: string;
+  level?: string;
+  type?: string;
+  point?: number;
+  easyQuestion?: number;
+  mediumQuestion?: number;
+  hardQuestion?: number;
+  author?: string;
+  imageUrl?: string;
+  examType?: string;
+  cost?: number;
+  price?: number;
+  rating?: number;
+  totalAttempts?: number;
+  uniqueParticipants?: number;
+  avgScore?: number;
+  minScore?: number;
 }
 
-// Interface for CourseStudent data
+// Interface for the new paginated API response
+interface PaginatedResponse<T> {
+  status: number;
+  message: string;
+  data: {
+    content: T[];
+    totalElements: number;
+    totalPages: number;
+    pageable: {
+      pageNumber: number;
+      pageSize: number;
+      offset: number;
+    };
+    size: number;
+    number: number;
+    numberOfElements: number;
+    first: boolean;
+    last: boolean;
+    empty: boolean;
+  };
+}
+
+// Updated CourseStudent interface to match the new API response
 interface CourseStudent {
-  id: string;
-  studentId: string;
-  studentName: string;
-  studentEmail: string;
+  id?: string;
+  accountId: number;
+  fullname: string;
+  email: string;
+  image?: string;
   avatar?: string;
-  courseId: string;
-  courseTitle: string;
+  gender?: string;
+  phone?: string;
+  courseId: number;
+  coursesTitle?: string;
   enrollmentDate: string;
-  progress: number;
-  completionStatus: 'not_started' | 'in_progress' | 'completed';
-  score: number;
+  enrollmentStatus: string;
+  completionStatus?: string;
+  certificateCode?: string;
+  certificateUrl?: string;
+  certificateVerified?: boolean;
+  issuedAt?: string;
+  testCount: number;
+  totalTestScore: number;
+  avgTestScore: number;
+  lastTestCompletedAt?: string;
+  lessonCompleted: number;
+  chapterCompleted: number;
+  totalLessons: number;
+  totalChapters: number;
+  progressPercent: number;
+  progress?: number;
+  lastProgressCompletedAt?: string;
+  totalScore?: number;
 }
 
 // Add interface for Course
@@ -71,253 +135,163 @@ interface Course {
 
 const ResultsPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
-  const [searchText, setSearchText] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<string>('all');
+  const [searchTextCourse, setSearchTextCourse] = useState<string>(''); // search keyword for course tab
+  const [searchTextExam, setSearchTextExam] = useState<string>('');   // search keyword for exam tab
+
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [filterCourse, setFilterCourse] = useState<string>('all');
   const [filterCourseLearning, setFilterCourseLearning] = useState<string>('all');
-  const [activeResultType, setActiveResultType] = useState<'exam' | 'course'>('exam');
+  const [activeResultType, setActiveResultType] = useState<'exam' | 'course'>('course');
   const [examDetailsVisible, setExamDetailsVisible] = useState<boolean>(false);
   const [selectedExam, setSelectedExam] = useState<TestResult | null>(null);
   const [courseStatsVisible, setcourseStatsVisible] = useState<boolean>(false);
-  const [selectedCourseStats, setSelectedCourseStats] = useState<Course | null>(null);
+
   const [studentDetailsVisible, setStudentDetailsVisible] = useState<boolean>(false);
   const [selectedStudent, setSelectedStudent] = useState<CourseStudent | null>(null);
+  const [courseStudents, setCourseStudents] = useState<CourseStudent[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [results, setResults] = useState<TestResult[]>([]);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [pageSizeExam, setPageSizeExam] = useState<number>(10);
+  const [currentPage, setCurrentPage] = useState<number>(0);
+  const [examCurrentPage, setExamCurrentPage] = useState<number>(0);
+  const [totalElements, setTotalElements] = useState<number>(0);
+  const [examTotalElements, setExamTotalElements] = useState<number>(0);
+  const [totalPages, setTotalPages] = useState<number>(0);
+  const [examTotalPages, setExamTotalPages] = useState<number>(0);
+  const navigate = useNavigate();
+  const refresh = useRefreshToken();
+  const refreshToken = localStorage.getItem("refreshToken");
+  const [totalCourseStudents, setTotalCourseStudents] = useState<number>(0);
+
+  // Refs for form controls to reset their values
+  const examSearchRef = React.useRef<any>(null);
+  const courseSearchRef = React.useRef<any>(null);
+  const examFilterRef = React.useRef<any>(null);
+  const courseFilterRef = React.useRef<any>(null);
+
 
   useEffect(() => {
-    // Giả lập tải dữ liệu
-    setTimeout(() => {
-      setLoading(false);
-    }, 1000);
+    fetchCourseList();
+
+    if (activeResultType === 'exam') {
+      fetchExamResults(0, pageSizeExam);
+    } else {
+      fetchStudents(0, pageSize);
+    }
   }, []);
 
-  // Sample courses data
-  const courses: Course[] = [
-    {
-      id: 'C001',
-      title: 'Lập trình Web nâng cao với React',
-      subject: 'Lập trình',
-      examCount: 5,
-      soldCount: 120
-    },
-    {
-      id: 'C002',
-      title: 'Machine Learning từ A-Z',
-      subject: 'Khoa học dữ liệu',
-      examCount: 8,
-      soldCount: 85
-    },
-    {
-      id: 'C003',
-      title: 'Thiết kế UI/UX cho người mới bắt đầu',
-      subject: 'Thiết kế',
-      examCount: 3,
-      soldCount: 62
-    },
-    {
-      id: 'C004',
-      title: 'Quản trị dự án Agile',
-      subject: 'Quản trị',
-      examCount: 4,
-      soldCount: 45
-    }
-  ];
+  const fetchCourseList = async () => {
+    setLoading(true);
+    const token = await authTokenLogin(refreshToken, refresh, navigate);
+    if (!token) return;
 
-  // Update test results data with course info
-  const results: TestResult[] = [
-    {
-      id: '1',
-      studentId: 'SV00123',
-      studentName: 'Nguyễn Văn A',
-      studentEmail: 'nguyenvana@email.com',
-      avatar: 'https://zos.alipayobjects.com/rmsportal/ODTLcjxAfvqbxHnVXCYX.png',
-      examId: 'E001',
-      examTitle: 'Đề thi học kỳ 1 - Toán 12',
-      subject: 'Toán',
-      score: 85,
-      maxScore: 100,
-      percentageScore: 85,
-      correctAnswers: 42,
-      totalQuestions: 50,
-      startTime: '2023-10-15T08:30:00',
-      endTime: '2023-10-15T10:00:00',
-      duration: 90,
-      status: 'passed',
-      courseId: 'C001',
-      courseTitle: 'Lập trình Web nâng cao với React'
-    },
-    {
-      id: '2',
-      studentId: 'SV00456',
-      studentName: 'Trần Thị B',
-      studentEmail: 'tranthib@email.com',
-      examId: 'E002',
-      examTitle: 'Đề thi THPT Quốc Gia - Tiếng Anh',
-      subject: 'Tiếng Anh',
-      score: 65,
-      maxScore: 100,
-      percentageScore: 65,
-      correctAnswers: 32,
-      totalQuestions: 50,
-      startTime: '2023-10-16T14:00:00',
-      endTime: '2023-10-16T15:00:00',
-      duration: 60,
-      status: 'passed',
-      courseId: 'C002',
-      courseTitle: 'Machine Learning từ A-Z'
-    },
-    {
-      id: '3',
-      studentId: 'SV00789',
-      studentName: 'Lê Văn C',
-      studentEmail: 'levanc@email.com',
-      avatar: 'https://joeschmoe.io/api/v1/random',
-      examId: 'E003',
-      examTitle: 'Đề thi thử đại học - Vật lý',
-      subject: 'Vật lý',
-      score: 45,
-      maxScore: 100,
-      percentageScore: 45,
-      correctAnswers: 18,
-      totalQuestions: 40,
-      startTime: '2023-10-17T09:00:00',
-      endTime: '2023-10-17T09:50:00',
-      duration: 50,
-      status: 'failed',
-      courseId: 'C003',
-      courseTitle: 'Thiết kế UI/UX cho người mới bắt đầu'
-    },
-    {
-      id: '4',
-      studentId: 'SV01001',
-      studentName: 'Phạm Thị D',
-      studentEmail: 'phamthid@email.com',
-      examId: 'E004',
-      examTitle: 'Đề luyện tập môn Hóa học - Chương 3',
-      subject: 'Hóa học',
-      score: 90,
-      maxScore: 100,
-      percentageScore: 90,
-      correctAnswers: 18,
-      totalQuestions: 20,
-      startTime: '2023-10-18T10:30:00',
-      endTime: '2023-10-18T11:15:00',
-      duration: 45,
-      status: 'passed',
-      courseId: 'C001',
-      courseTitle: 'Lập trình Web nâng cao với React'
-    },
-    {
-      id: '5',
-      studentId: 'SV01234',
-      studentName: 'Vũ Văn E',
-      studentEmail: 'vuvane@email.com',
-      examId: 'E005',
-      examTitle: 'Đề thi thử đại học - Sinh học',
-      subject: 'Sinh học',
-      score: 72,
-      maxScore: 100,
-      percentageScore: 72,
-      correctAnswers: 29,
-      totalQuestions: 40,
-      startTime: '2023-10-19T13:00:00',
-      endTime: '2023-10-19T13:50:00',
-      duration: 50,
-      status: 'passed',
-      courseId: 'C002',
-      courseTitle: 'Machine Learning từ A-Z'
-    },
-    {
-      id: '6',
-      studentId: 'SV00789',
-      studentName: 'Lê Văn C',
-      studentEmail: 'levanc@email.com',
-      avatar: 'https://joeschmoe.io/api/v1/random',
-      examId: 'E006',
-      examTitle: 'Đề thi giữa kỳ - Hóa học',
-      subject: 'Hóa học',
-      score: 35,
-      maxScore: 100,
-      percentageScore: 35,
-      correctAnswers: 14,
-      totalQuestions: 40,
-      startTime: '2023-10-20T10:00:00',
-      endTime: '2023-10-20T10:50:00',
-      duration: 50,
-      status: 'failed',
-      courseId: 'C004',
-      courseTitle: 'Quản trị dự án Agile'
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_SERVER_HOST}/api/courses/get-all-result-list`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch course data");
+      }
+      const data: Course[] = await response.json();
+      setCourses(data);
+    } catch (error: any) {
+      console.error("Failed to fetch courses:", error);
+      message.error("Không thể tải danh sách môn học");
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  // Course student data
-  const courseStudents: CourseStudent[] = [
-    {
-      id: 'CS001',
-      studentId: 'SV00123',
-      studentName: 'Nguyễn Văn A',
-      studentEmail: 'nguyenvana@email.com',
-      avatar: 'https://zos.alipayobjects.com/rmsportal/ODTLcjxAfvqbxHnVXCYX.png',
-      courseId: 'C001',
-      courseTitle: 'Lập trình Web nâng cao với React',
-      enrollmentDate: '2023-09-15T08:30:00',
-      progress: 85,
-      completionStatus: 'in_progress',
-      score: 78
-    },
-    {
-      id: 'CS002',
-      studentId: 'SV00456',
-      studentName: 'Trần Thị B',
-      studentEmail: 'tranthib@email.com',
-      courseId: 'C002',
-      courseTitle: 'Machine Learning từ A-Z',
-      enrollmentDate: '2023-08-20T10:15:00',
-      progress: 92,
-      completionStatus: 'completed',
-      score: 92
-    },
-    {
-      id: 'CS003',
-      studentId: 'SV00789',
-      studentName: 'Lê Văn C',
-      studentEmail: 'levanc@email.com',
-      avatar: 'https://joeschmoe.io/api/v1/random',
-      courseId: 'C003',
-      courseTitle: 'Thiết kế UI/UX cho người mới bắt đầu',
-      enrollmentDate: '2023-09-05T13:20:00',
-      progress: 45,
-      completionStatus: 'in_progress',
-      score: 65
-    },
-    {
-      id: 'CS004',
-      studentId: 'SV01001',
-      studentName: 'Phạm Thị D',
-      studentEmail: 'phamthid@email.com',
-      courseId: 'C004',
-      courseTitle: 'Quản trị dự án Agile',
-      enrollmentDate: '2023-10-01T09:00:00',
-      progress: 15,
-      completionStatus: 'in_progress',
-      score: 60
-    },
-    {
-      id: 'CS005',
-      studentId: 'SV01234',
-      studentName: 'Vũ Văn E',
-      studentEmail: 'vuvane@email.com',
-      courseId: 'C001',
-      courseTitle: 'Lập trình Web nâng cao với React',
-      enrollmentDate: '2023-09-18T14:30:00',
-      progress: 5,
-      completionStatus: 'not_started',
-      score: 0
+
+
+  // -------- Fetch course students from API --------
+  const mapApiStudent = (api: any): CourseStudent => ({
+    id: api.id,
+    accountId: api.accountId,
+    fullname: api.fullname,
+    email: api.email,
+    image: api.image,
+    avatar: api.image,
+    gender: api.gender,
+    phone: api.phone,
+    courseId: api.courseId,
+    coursesTitle: api.coursesTitle,
+    enrollmentDate: api.enrollmentDate,
+    enrollmentStatus: api.enrollmentStatus,
+    completionStatus: (api.enrollmentStatus || '').toLowerCase().includes('complete') ? 'completed' : (api.enrollmentStatus || '').toLowerCase().includes('study') ? 'in_progress' : 'not_started',
+    certificateCode: api.certificateCode,
+    certificateUrl: api.certificateUrl,
+    certificateVerified: api.certificateVerified,
+    issuedAt: api.issuedAt,
+    testCount: api.testCount,
+    totalTestScore: api.totalTestScore,
+    avgTestScore: api.avgTestScore,
+    lastTestCompletedAt: api.lastTestCompletedAt,
+    lessonCompleted: api.lessonCompleted,
+    chapterCompleted: api.chapterCompleted,
+    totalLessons: api.totalLessons,
+    totalChapters: api.totalChapters,
+    progressPercent: api.progressPercent,
+    progress: api.progressPercent,
+    lastProgressCompletedAt: api.lastProgressCompletedAt,
+    totalScore: api.totalTestScore
+  });
+
+  const fetchStudents = async (page: number, size: number) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+
+      // Construct the URL based on whether a specific course is selected
+      let url = `${process.env.REACT_APP_SERVER_HOST}/api/courses/result/students?page=${page}&size=${size}`;
+
+      // Only add courseId parameter if a specific course is selected
+      if (filterCourseLearning !== 'all') {
+        url += `&courseId=${filterCourseLearning}`;
+      }
+
+      // Add search parameter if there is search text
+      if (searchTextCourse) {
+        url += `&search=${encodeURIComponent(searchTextCourse)}`;
+      }
+
+      const res = await axios.get<PaginatedResponse<any>>(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.data.status === 200) {
+        // Always update the data when this function is called
+        const transformed = res.data.data.content.map((s: any) => mapApiStudent(s));
+        setTotalCourseStudents(res.data.data.totalElements);
+        setCourseStudents(transformed);
+        setTotalElements(res.data.data.totalElements);
+        setTotalPages(res.data.data.totalPages);
+      }
+    } catch (err) {
+      message.error('Không thể tải danh sách học viên');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchStudents(currentPage, pageSize);
+  }, [filterCourseLearning, pageSize, currentPage, searchTextCourse]);
+
+  useEffect(() => {
+    fetchExamResults(examCurrentPage, pageSizeExam);
+  }, [filterCourse, pageSizeExam, examCurrentPage, searchTextExam]);
 
   const getStatusTag = (status: string) => {
-    switch(status) {
+    switch (status) {
       case 'passed':
         return <Tag icon={<CheckCircleOutlined />} color="success">Đạt</Tag>;
       case 'failed':
@@ -336,17 +310,19 @@ const ResultsPage: React.FC = () => {
     return '#f5222d';
   };
 
-  const handleSearch = (value: string) => {
-    setSearchText(value);
+  // Search handlers
+  const handleCourseSearch = (value: string) => {
+    setSearchTextCourse(value);
   };
 
-  const handleTabChange = (key: string) => {
-    setActiveTab(key);
+  const handleExamSearch = (value: string) => {
+    setSearchTextExam(value);
   };
 
   const handleCourseChange = (value: string) => {
     setFilterCourse(value);
   };
+
 
   const handleCourseLearningChange = (value: string) => {
     setFilterCourseLearning(value);
@@ -356,13 +332,59 @@ const ResultsPage: React.FC = () => {
     setSelectedRowKeys(newSelectedRowKeys);
   };
 
-  const downloadResults = () => {
-    message.success('Đang tải xuống kết quả...');
+  // Export selected exam results to Excel
+  const downloadResults = async () => {
+    if (activeResultType !== 'exam') return;
+
+    if (selectedRowKeys.length === 0) {
+      message.warning('Vui lòng chọn ít nhất một bài thi để xuất');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+      if (!token) {
+        message.error('Không xác thực được người dùng');
+        return;
+      }
+
+      const response = await fetch(`${process.env.REACT_APP_SERVER_HOST}/api/tests/result/export-excel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(selectedRowKeys)
+      });
+
+      if (!response.ok) {
+        throw new Error('Xuất tệp Excel thất bại');
+      }
+
+      const blob = await response.blob();
+      // Create a download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // Use timestamp for file name
+      link.download = `ExamResults_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      message.success('Đã xuất file Excel thành công');
+    } catch (err: any) {
+      console.error(err);
+      message.error(err.message || 'Không thể xuất tệp Excel');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Get status tag for course completion
   const getCourseStatusTag = (status: string) => {
-    switch(status) {
+    switch (status) {
       case 'completed':
         return <Tag icon={<CheckCircleOutlined />} color="success">Hoàn thành</Tag>;
       case 'in_progress':
@@ -380,46 +402,17 @@ const ResultsPage: React.FC = () => {
     setStudentDetailsVisible(true);
   };
 
-  // Mock student activity data for the details popup
-  const studentActivities = [
-    { id: 1, type: 'lesson', title: 'Bài 1: Giới thiệu khóa học', date: '2023-10-10T15:30:00', status: 'completed', score: 100 },
-    { id: 2, type: 'quiz', title: 'Quiz 1: Kiến thức cơ bản', date: '2023-10-12T10:15:00', status: 'completed', score: 85 },
-    { id: 3, type: 'lesson', title: 'Bài 2: Kiến thức chuyên sâu', date: '2023-10-15T14:20:00', status: 'completed', score: null },
-    { id: 4, type: 'assignment', title: 'Bài tập 1: Thực hành', date: '2023-10-18T16:45:00', status: 'completed', score: 92 },
-    { id: 5, type: 'lesson', title: 'Bài 3: Kỹ thuật nâng cao', date: '2023-10-22T09:30:00', status: 'in_progress', score: null },
-    { id: 6, type: 'quiz', title: 'Quiz 2: Kiểm tra giữa kỳ', date: '2023-10-25T11:00:00', status: 'not_started', score: null },
-  ];
 
-  // Get activity icon based on type
-  const getActivityIcon = (type: string) => {
-    switch(type) {
-      case 'lesson':
-        return <ReadOutlined />;
-      case 'quiz':
-        return <SolutionOutlined />;
-      case 'assignment':
-        return <FileExcelOutlined />;
-      default:
-        return <ClockCircleOutlined />;
-    }
-  };
-  
-  // Get activity color based on status
-  const getActivityColor = (status: string) => {
-    switch(status) {
-      case 'completed':
-        return 'green';
-      case 'in_progress':
-        return 'blue';
-      case 'not_started':
-        return 'gray';
-      default:
-        return 'blue';
-    }
-  };
+
 
   // Columns for course learning results
   const courseColumns: ColumnsType<CourseStudent> = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 50
+    },
     {
       title: 'Học viên',
       dataIndex: 'student',
@@ -428,12 +421,31 @@ const ResultsPage: React.FC = () => {
         <Space>
           <Avatar src={record.avatar} icon={!record.avatar && <UserOutlined />} />
           <Space direction="vertical" size={0}>
-            <Text strong>{record.studentName}</Text>
-            <Text type="secondary" style={{ fontSize: '12px' }}>{record.studentId} | {record.studentEmail}</Text>
+            <Text strong>{record.fullname}</Text>
+            <Text type="secondary" style={{ fontSize: '12px' }}>{record.accountId} | {record.email}</Text>
           </Space>
         </Space>
       ),
-      sorter: (a, b) => a.studentName.localeCompare(b.studentName),
+      sorter: (a, b) => {
+        const nameA = a.fullname || '';
+        const nameB = b.fullname || '';
+        return nameA.localeCompare(nameB);
+      },
+    },
+    {
+      title: 'Điểm trung bình',
+      dataIndex: 'avgTestScore',
+      key: 'avgTestScore',
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{record.avgTestScore.toFixed(2) || 0}/10</Text>
+        </Space>
+      ),
+      sorter: (a, b) => {
+        const scoreA = a.avgTestScore || 0;
+        const scoreB = b.avgTestScore || 0;
+        return scoreA - scoreB;
+      },
     },
     {
       title: 'Khóa học',
@@ -441,13 +453,65 @@ const ResultsPage: React.FC = () => {
       key: 'course',
       render: (_, record) => (
         <Space direction="vertical" size={0}>
-          <Text strong>{record.courseTitle}</Text>
+          <Text strong>{record.coursesTitle}</Text>
           <Text type="secondary" style={{ fontSize: '12px' }}>
             Ngày đăng ký: {new Date(record.enrollmentDate).toLocaleDateString('vi-VN')}
           </Text>
         </Space>
       ),
-      sorter: (a, b) => a.courseTitle.localeCompare(b.courseTitle),
+      sorter: (a, b) => {
+        const titleA = a.coursesTitle || '';
+        const titleB = b.coursesTitle || '';
+        return titleA.localeCompare(titleB);
+      },
+    },
+    {
+      title: 'Tiến độ',
+      dataIndex: 'progressPercent',
+      key: 'progressPercent',
+      render: (_, record) => {
+        const progressValue = record.progressPercent || 0;
+        return (
+          <Space direction="vertical" size={0} style={{ width: '100%' }}>
+            <Progress
+              percent={progressValue}
+              size="small"
+              format={(percent) => `${percent}%`}
+              status={progressValue >= 100 ? "success" : "active"}
+            />
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              {record.lessonCompleted}/{record.totalLessons} bài học
+            </Text>
+          </Space>
+        );
+      },
+      sorter: (a, b) => {
+        const progressA = a.progressPercent || 0;
+        const progressB = b.progressPercent || 0;
+        return progressA - progressB;
+      },
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      key: 'status',
+      render: (_, record) => {
+        const status = record.completionStatus ||
+          ((record.progressPercent || 0) >= 100 ? 'completed' :
+            (record.progressPercent || 0) > 0 ? 'in_progress' : 'not_started');
+        return getCourseStatusTag(status);
+      },
+      filters: [
+        { text: 'Hoàn thành', value: 'completed' },
+        { text: 'Đang học', value: 'in_progress' },
+        { text: 'Chưa bắt đầu', value: 'not_started' },
+      ],
+      onFilter: (value, record) => {
+        const status = record.completionStatus ||
+          ((record.progressPercent || 0) >= 100 ? 'completed' :
+            (record.progressPercent || 0) > 0 ? 'in_progress' : 'not_started');
+        return status === value;
+      },
     },
     {
       title: 'Hành động',
@@ -472,134 +536,201 @@ const ResultsPage: React.FC = () => {
     },
   ];
 
-  // Get unique courses from courseStudents
-  const uniqueCoursesInLearning = Array.from(new Set(courseStudents.map(student => student.courseId)));
-  const coursesInLearning = uniqueCoursesInLearning.map(courseId => {
-    const student = courseStudents.find(s => s.courseId === courseId);
-    return {
-      id: courseId,
-      title: student ? student.courseTitle : 'Unknown Course'
-    };
-  });
+  // const filteredExamData = activeResultType === 'exam' ? results.filter(result => {
+  //   if (!searchText) return true;
 
-  const filteredCourseData = courseStudents.filter(student => {
-    if (!searchText) return true;
-    return (
-      student.studentName.toLowerCase().includes(searchText.toLowerCase()) ||
-      student.studentId.toLowerCase().includes(searchText.toLowerCase()) ||
-      student.courseTitle.toLowerCase().includes(searchText.toLowerCase())
-    );
-  }).filter(student => {
-    if (filterCourseLearning === 'all') return true;
-    return student.courseId === filterCourseLearning;
-  });
+  //   const title = result.examTitle || result.title || '';
+  //   const course = result.title || '';
+  //   const author = result.author || '';
 
-  // Course data statistics
-  const totalCourseStudents = courseStudents.length;
+  //   return (
+  //     title.toLowerCase().includes(searchText.toLowerCase()) ||
+  //     course.toLowerCase().includes(searchText.toLowerCase()) ||
+  //     author.toLowerCase().includes(searchText.toLowerCase())
+  //   );
+  // }) : [];
 
-  // Handle changing between exam and course results
+  // const filteredCourseData = activeResultType === 'course' ? courseStudents.filter(student => {
+  //   if (!searchTextCourse) return true;
+
+  //   const fullname = student.fullname || '';
+
+  //   const coursesTitle = student.coursesTitle || '';
+
+  //   return (
+  //     fullname.toLowerCase().includes(searchText.toLowerCase()) ||
+
+  //     coursesTitle.toLowerCase().includes(searchText.toLowerCase())
+  //   );
+  // }) : [];
+
+
+
   const handleResultTypeChange = (type: 'exam' | 'course') => {
-    setActiveResultType(type);
+    setSearchTextCourse('');
+    setSearchTextExam('');
+    setSelectedRowKeys([]);
+
+    if (type === 'exam') {
+      setCourseStudents([]);
+      setTotalElements(0);
+      setTotalPages(0);
+      setCurrentPage(0);
+      setExamCurrentPage(0);
+      setActiveResultType(type);
+      fetchCourseList();
+      handleCourseChange('all')
+      setTimeout(() => {
+        fetchExamResults(0, pageSizeExam);
+      }, 0);
+    } else {
+      setResults([]);
+      setExamTotalElements(0);
+      setExamTotalPages(0);
+      setExamCurrentPage(0);
+      setCurrentPage(0);
+      handleCourseLearningChange('all')
+      setActiveResultType(type);
+      fetchCourseList();
+      setTimeout(() => {
+        fetchStudents(0, pageSize);
+      }, 0);
+    }
   };
 
-  // View Exam Details
   const viewExamDetails = (record: TestResult) => {
     setSelectedExam(record);
     setExamDetailsVisible(true);
   };
 
-  // View Course Exam Stats
-  const viewCourseExamStats = (courseId: string) => {
-    const course = courses.find(c => c.id === courseId);
-    if (course) {
-      setSelectedCourseStats(course);
-      setcourseStatsVisible(true);
-    }
-  };
 
-  const columns: ColumnsType<TestResult> = [
-    {
-      title: 'Học viên',
-      dataIndex: 'student',
-      key: 'student',
-      render: (_, record) => (
-        <Space>
-          <Avatar src={record.avatar} icon={!record.avatar && <UserOutlined />} />
-          <Space direction="vertical" size={0}>
-            <Text strong>{record.studentName}</Text>
-            <Text type="secondary" style={{ fontSize: '12px' }}>{record.studentId} | {record.studentEmail}</Text>
-          </Space>
-        </Space>
-      ),
-      sorter: (a, b) => a.studentName.localeCompare(b.studentName),
-    },
+  const examColumns: ColumnsType<TestResult> = [
     {
       title: 'Bài thi',
       dataIndex: 'exam',
       key: 'exam',
       render: (_, record) => (
         <Space direction="vertical" size={0}>
-          <Text strong>{record.examTitle}</Text>
+          <Space>
+            {record.imageUrl && (
+              <Avatar shape="square" size="large" src={record.imageUrl} />
+            )}
+            <div>
+              <Text strong>{record.examTitle || record.title}</Text>
+              {record.author && (
+                <Text type="secondary" style={{ fontSize: '12px', display: 'block' }}>
+                  Tác giả: {record.author}
+                </Text>
+              )}
+            </div>
+          </Space>
           {record.courseTitle && (
-            <Text type="secondary" style={{ fontSize: '12px' }}>Khóa học: {record.courseTitle}</Text>
+            <Text type="secondary" style={{ fontSize: '12px', marginTop: 5 }}>Khóa học: {record.courseTitle}</Text>
           )}
         </Space>
       ),
-      sorter: (a, b) => a.examTitle.localeCompare(b.examTitle),
+      sorter: (a, b) => {
+        const titleA = a.examTitle || a.title || '';
+        const titleB = b.examTitle || b.title || '';
+        return titleA.localeCompare(titleB);
+      },
+    },
+    {
+      title: 'Thông tin',
+      dataIndex: 'info',
+      key: 'info',
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          {record.type && <Tag color="blue">{record.type}</Tag>}
+          {record.level && <Tag color={record.level === 'HARD' ? 'red' : record.level === 'MEDIUM' ? 'orange' : 'green'}>{record.level}</Tag>}
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            Câu hỏi: {record.totalQuestions || record.totalQuestion || 0}
+          </Text>
+          {record.easyQuestion !== undefined && (
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              Dễ: {record.easyQuestion}, Vừa: {record.mediumQuestion}, Khó: {record.hardQuestion}
+            </Text>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: 'Thống kê',
+      dataIndex: 'stats',
+      key: 'stats',
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>Lượt thi: {record.totalAttempts || 0}</Text>
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            Người tham gia: {record.uniqueParticipants || 0}
+          </Text>
+          {record.rating !== undefined && (
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              Đánh giá:  {record.rating != null ? record.rating.toFixed(1) : 0}/5
+            </Text>
+          )}
+        </Space>
+      ),
+      sorter: (a, b) => {
+        const attemptsA = a.totalAttempts || 0;
+        const attemptsB = b.totalAttempts || 0;
+        return attemptsA - attemptsB;
+      },
     },
     {
       title: 'Điểm số',
       dataIndex: 'score',
       key: 'score',
-      render: (_, record) => (
-        <Space direction="vertical" size={0} style={{ width: '100%' }}>
-          <Text strong style={{ color: getScoreColor(record.percentageScore) }}>
-            {record.score}/{record.maxScore} ({record.percentageScore}%)
-          </Text>
-          <Progress 
-            percent={record.percentageScore} 
-            size="small" 
-            showInfo={false}
-            strokeColor={getScoreColor(record.percentageScore)}
-          />
-          <Text type="secondary" style={{ fontSize: '12px' }}>
-            {record.correctAnswers}/{record.totalQuestions} câu đúng
-          </Text>
-        </Space>
-      ),
-      sorter: (a, b) => a.percentageScore - b.percentageScore,
+      render: (_, record) => {
+        const scoreValue = record.avgScore || 0;
+        const maxScoreValue = record.maxScore || 10;
+        const percentageScore = scoreValue ? (scoreValue / maxScoreValue * 100) : 0;
+
+        return (
+          <Space direction="vertical" size={0} style={{ width: '100%' }}>
+            <Text strong style={{ color: getScoreColor(percentageScore) }}>
+              {scoreValue.toFixed(2)}/{maxScoreValue} ({percentageScore.toFixed(0)}%)
+            </Text>
+            <Progress
+              percent={percentageScore}
+              size="small"
+              showInfo={false}
+              strokeColor={getScoreColor(percentageScore)}
+            />
+            {record.minScore !== undefined && (
+              <Text type="secondary" style={{ fontSize: '12px' }}>
+                Min: {record.minScore.toFixed(1)}, Max: {record.maxScore?.toFixed(1) || 10}
+              </Text>
+            )}
+          </Space>
+        )
+      },
+      sorter: (a, b) => {
+        const scoreA = a.avgScore || 0;
+        const scoreB = b.avgScore || 0;
+        return scoreA - scoreB;
+      },
     },
     {
       title: 'Thời gian',
       dataIndex: 'time',
       key: 'time',
       render: (_, record) => {
-        const startDate = new Date(record.startTime);
-        const formattedStart = `${startDate.toLocaleDateString('vi-VN')} ${startDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
-        
         return (
           <Space direction="vertical" size={0}>
-            <Text>{formattedStart}</Text>
-            <Text type="secondary" style={{ fontSize: '12px' }}>
-              <ClockCircleOutlined /> {record.duration} phút
+            <Text>
+              <ClockCircleOutlined /> {record.duration ? `${record.duration / 60} phút` : 'N/A'}
             </Text>
           </Space>
         );
       },
-      sorter: (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+      sorter: (a, b) => {
+        const durationA = a.duration || 0;
+        const durationB = b.duration || 0;
+        return durationA - durationB;
+      },
     },
-    {
-      title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status) => getStatusTag(status),
-      filters: [
-        { text: 'Đạt', value: 'passed' },
-        { text: 'Không đạt', value: 'failed' },
-        { text: 'Hoàn thành', value: 'completed' },
-      ],
-      onFilter: (value, record) => record.status === value,
-    },
+
     {
       title: 'Hành động',
       key: 'action',
@@ -626,51 +757,104 @@ const ResultsPage: React.FC = () => {
     },
   ];
 
-  const filteredData = results.filter(result => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'passed') return result.status === 'passed';
-    if (activeTab === 'failed') return result.status === 'failed';
-    return true;
-  }).filter(result => {
-    if (!searchText) return true;
-    return (
-      result.studentName.toLowerCase().includes(searchText.toLowerCase()) ||
-      result.studentId.toLowerCase().includes(searchText.toLowerCase()) ||
-      result.examTitle.toLowerCase().includes(searchText.toLowerCase()) ||
-      (result.courseTitle && result.courseTitle.toLowerCase().includes(searchText.toLowerCase()))
-    );
-  }).filter(result => {
-    if (filterCourse === 'all') return true;
-    return result.courseId === filterCourse;
-  });
-
   const rowSelection = {
     selectedRowKeys,
     onChange: onSelectChange,
   };
 
-  // Tính toán thống kê tổng hợp
-  const totalResults = results.length;
-  const passedResults = results.filter(r => r.status === 'passed').length;
-  const failedResults = results.filter(r => r.status === 'failed').length;
-  const averageScore = results.reduce((acc, curr) => acc + curr.percentageScore, 0) / totalResults;
+  const fetchExamResults = async (page: number, size: number) => {
+    setLoading(true);
+    const token = await authTokenLogin(refreshToken, refresh, navigate);
+    if (!token) return;
 
-  // Calculate course exam stats
-  const examsByCourseCounts = courses.map(course => {
-    const examsForCourse = results.filter(r => r.courseId === course.id).length;
-    return {
-      course: course.title,
-      count: examsForCourse,
-      sold: course.soldCount
-    };
-  });
+    try {
+      let url = `${process.env.REACT_APP_SERVER_HOST}/api/tests/result/students?page=${page}&size=${size}`;
+
+      if (filterCourse !== 'all') {
+        url += `&categoryLevel4Id=${filterCourse}`;
+      }
+
+      if (searchTextExam) {
+        url += `&search=${encodeURIComponent(searchTextExam)}`;
+      }
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch exam results");
+      }
+
+      const responseData = await response.json();
+
+      if (responseData.status === 200 && responseData.data) {
+        const mappedResults = responseData.data.content.map((result: any) => ({
+          testId: result.testId,
+          id: result.testId?.toString(),
+          examId: result.testId?.toString(),
+          title: result.title,
+          examTitle: result.title,
+          description: result.description,
+          courseTitle: result.courseTitle,
+          courseId: result.categoryLevel1Id,
+          subject: result.courseTitle,
+          score: result.avgScore || 0,
+          maxScore: result.maxScore || 10,
+          percentageScore: result.avgScore ? (result.avgScore * 10) : 0,
+          totalQuestions: result.totalQuestion,
+          duration: result.duration,
+          status: result.avgScore >= 5 ? 'passed' : 'failed',
+          level: result.level,
+          type: result.type,
+          point: result.point,
+          easyQuestion: result.easyQuestion,
+          mediumQuestion: result.mediumQuestion,
+          hardQuestion: result.hardQuestion,
+          author: result.author,
+          imageUrl: result.imageUrl,
+          examType: result.examType,
+          cost: result.cost,
+          price: result.price,
+          rating: result.rating,
+          totalAttempts: result.totalAttempts,
+          uniqueParticipants: result.uniqueParticipants,
+          avgScore: result.avgScore,
+          minScore: result.minScore
+        }));
+
+        setResults(mappedResults);
+        setExamTotalElements(responseData.data.totalElements || 0);
+        setExamTotalPages(responseData.data.totalPages || 0);
+      }
+    } catch (error: any) {
+      console.error("Failed to fetch exam results:", error);
+      message.error("Không thể tải kết quả bài thi");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePaginationChange = (page: number, pageSize?: number) => {
+    setCurrentPage(page - 1);
+    if (pageSize) setPageSize(pageSize);
+  };
+
+  const handleExamPaginationChange = (page: number, pageSize?: number) => {
+    setExamCurrentPage(page - 1);
+    if (pageSize) setPageSizeExam(pageSize);
+  };
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={2}>Quản lý Kết quả</Title>
-        <Radio.Group 
-          value={activeResultType} 
+        <Radio.Group
+          value={activeResultType}
           onChange={e => handleResultTypeChange(e.target.value)}
           buttonStyle="solid"
         >
@@ -683,101 +867,7 @@ const ResultsPage: React.FC = () => {
         </Radio.Group>
       </div>
 
-      {activeResultType === 'exam' ? (
-        <>
-          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-            <Col xs={24} sm={12} md={12}>
-              <Card>
-                <Statistic
-                  title="Tổng số bài thi"
-                  value={totalResults}
-                  prefix={<FileExcelOutlined />}
-                />
-              </Card>
-            </Col>
-            <Col xs={24} sm={12} md={12}>
-              <Card onClick={() => setcourseStatsVisible(true)} style={{ cursor: 'pointer' }}>
-                <Statistic
-                  title="Tổng số bài thi đã bán"
-                  value={courses.reduce((acc, curr) => acc + curr.soldCount, 0)}
-                  prefix={<ShoppingOutlined />}
-                />
-              </Card>
-            </Col>
-          </Row>
-
-          <Card style={{ marginBottom: 16 }}>
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
-                <Space>
-                  <Button 
-                    icon={<DownloadOutlined />} 
-                    onClick={downloadResults}
-                    disabled={selectedRowKeys.length === 0}
-                  >
-                    Tải xuống {selectedRowKeys.length > 0 ? `(${selectedRowKeys.length})` : ''}
-                  </Button>
-                  <Button icon={<ExportOutlined />}>
-                    Xuất dữ liệu
-                  </Button>
-                </Space>
-                <Space>
-                  <Search
-                    placeholder="Tìm kiếm kết quả..."
-                    allowClear
-                    onSearch={handleSearch}
-                    onChange={e => setSearchText(e.target.value)}
-                    style={{ width: 250 }}
-                  />
-                  <Select 
-                    defaultValue="all" 
-                    style={{ width: 200 }} 
-                    onChange={handleCourseChange}
-                  >
-                    <Option value="all">Tất cả khóa học</Option>
-                    {courses.map(course => (
-                      <Option key={course.id} value={course.id}>{course.title}</Option>
-                    ))}
-                  </Select>
-                </Space>
-              </Space>
-
-              <Tabs defaultActiveKey="all" onChange={handleTabChange}>
-                <TabPane tab={<span>Tất cả kết quả</span>} key="all">
-                  <Table
-                    columns={columns}
-                    dataSource={filteredData}
-                    rowKey="id"
-                    loading={loading}
-                    rowSelection={rowSelection}
-                    pagination={{
-                      pageSize: 10,
-                      showSizeChanger: true,
-                      showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} kết quả`
-                    }}
-                  />
-                </TabPane>
-                <TabPane
-                  tab={
-                    <Badge count={results.filter(r => r.status === 'passed').length} showZero>
-                      <span>Đạt</span>
-                    </Badge>
-                  }
-                  key="passed"
-                />
-                <TabPane
-                  tab={
-                    <Badge count={results.filter(r => r.status === 'failed').length} showZero>
-                      <span>Không đạt</span>
-                    </Badge>
-                  }
-                  key="failed"
-                />
-              </Tabs>
-            </Space>
-          </Card>
-        </>
-      ) : (
+      {activeResultType === 'course' ? (
         <>
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             <Col span={24}>
@@ -801,17 +891,19 @@ const ResultsPage: React.FC = () => {
                   <Search
                     placeholder="Tìm kiếm học viên, khóa học..."
                     allowClear
-                    onSearch={handleSearch}
-                    onChange={e => setSearchText(e.target.value)}
+                    ref={courseSearchRef}
+                    onSearch={handleCourseSearch}
+                    onChange={e => setSearchTextCourse(e.target.value)}
                     style={{ width: 250 }}
                   />
-                  <Select 
-                    defaultValue="all" 
-                    style={{ width: 200 }} 
+                  <Select
+                    defaultValue="all"
+                    style={{ width: 200 }}
+                    ref={courseFilterRef}
                     onChange={handleCourseLearningChange}
                   >
                     <Option value="all">Tất cả khóa học</Option>
-                    {coursesInLearning.map(course => (
+                    {courses.map(course => (
                       <Option key={course.id} value={course.id}>{course.title}</Option>
                     ))}
                   </Select>
@@ -820,21 +912,98 @@ const ResultsPage: React.FC = () => {
 
               <Table
                 columns={courseColumns}
-                dataSource={filteredCourseData}
+                dataSource={courseStudents}
                 rowKey="id"
                 loading={loading}
                 pagination={{
-                  pageSize: 10,
+                  current: currentPage + 1,
+                  pageSize: pageSize,
+                  total: totalElements,
                   showSizeChanger: true,
+                  pageSizeOptions: ['10', '20', '50', '100', '200'],
+                  onChange: handlePaginationChange,
+                  onShowSizeChange: (current, size) => {
+                    setPageSize(size);
+                    setCurrentPage(0);
+                  },
                   showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} kết quả`
                 }}
+                scroll={{ x: 'max-content', y: 450 }}
+              />
+            </Space>
+          </Card>
+        </>
+      ) : (
+        <>
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col span={24}>
+              <Card>
+                <Statistic
+                  title="Tổng số bài thi"
+                  value={examTotalElements}
+                  prefix={<FileExcelOutlined />}
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          <Card style={{ marginBottom: 16 }}>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
+                <Space>
+                  <Button disabled={selectedRowKeys.length === 0} onClick={downloadResults} icon={<ExportOutlined />}>
+                    Xuất dữ liệu {selectedRowKeys.length > 0 ? `(${selectedRowKeys.length})` : ''}
+                  </Button>
+                </Space>
+                <Space>
+                  <Search
+                    placeholder="Tìm kiếm kết quả..."
+                    allowClear
+                    ref={examSearchRef}
+                    onSearch={handleExamSearch}
+                    onChange={e => setSearchTextExam(e.target.value)}
+                    style={{ width: 250 }}
+                  />
+                  <Select
+                    defaultValue="all"
+                    style={{ width: 200 }}
+                    ref={examFilterRef}
+                    onChange={handleCourseChange}
+                  >
+                    <Option value="all">Tất cả khóa học</Option>
+                    {courses.map(course => (
+                      <Option key={course.id} value={course.id}>{course.title}</Option>
+                    ))}
+                  </Select>
+                </Space>
+              </Space>
+
+              <Table
+                columns={examColumns}
+                dataSource={results}
+                rowKey="testId"
+                loading={loading}
+                rowSelection={rowSelection}
+                pagination={{
+                  current: examCurrentPage + 1,
+                  pageSize: pageSizeExam,
+                  total: examTotalElements,
+                  showSizeChanger: true,
+                  pageSizeOptions: ['10', '20', '50', '100', '200'],
+                  onChange: handleExamPaginationChange,
+                  onShowSizeChange: (current, size) => {
+                    setPageSizeExam(size);
+                    setExamCurrentPage(0);
+                  },
+                  showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} kết quả`
+                }}
+                scroll={{ x: 'max-content', y: 450 }}
               />
             </Space>
           </Card>
         </>
       )}
 
-      {/* Exam Details Modal */}
       <Modal
         title="Chi tiết kết quả bài thi"
         open={examDetailsVisible}
@@ -843,9 +1012,9 @@ const ResultsPage: React.FC = () => {
           <Button key="back" onClick={() => setExamDetailsVisible(false)}>
             Đóng
           </Button>,
-          <Button 
-            key="download" 
-            type="primary" 
+          <Button
+            key="download"
+            type="primary"
             icon={<FilePdfOutlined />}
             onClick={() => message.success('Đang tải xuống báo cáo...')}
           >
@@ -858,69 +1027,64 @@ const ResultsPage: React.FC = () => {
           <div>
             <Row gutter={[16, 24]}>
               <Col span={24}>
-                <Card title="Thông tin học viên">
-                  <Space>
-                    <Avatar size={64} src={selectedExam.avatar} icon={!selectedExam.avatar && <UserOutlined />} />
+                <Card>
+                  <Space align="start">
+                    {selectedExam.imageUrl && (
+                      <Avatar shape="square" size={64} src={selectedExam.imageUrl} />
+                    )}
                     <Space direction="vertical">
-                      <Title level={4} style={{ margin: 0 }}>{selectedExam.studentName}</Title>
-                      <Text>ID: {selectedExam.studentId} | Email: {selectedExam.studentEmail}</Text>
+                      <Title level={4} style={{ margin: 0 }}>{selectedExam.examTitle || selectedExam.title}</Title>
+                      {selectedExam.author && <Text>Tác giả: {selectedExam.author}</Text>}
+                      {selectedExam.courseTitle && <Text>Khóa học: {selectedExam.courseTitle}</Text>}
                     </Space>
                   </Space>
                 </Card>
               </Col>
-              
+
               <Col span={24}>
-                <Card title="Thông tin bài thi">
+                <Card title="Thông tin chi tiết">
                   <Descriptions column={2} bordered>
-                    <Descriptions.Item label="Tên bài thi" span={2}>{selectedExam.examTitle}</Descriptions.Item>
-                    <Descriptions.Item label="Khóa học">{selectedExam.courseTitle || 'N/A'}</Descriptions.Item>
-                    <Descriptions.Item label="Thời gian làm bài">
-                      {new Date(selectedExam.startTime).toLocaleString('vi-VN')}
+                    <Descriptions.Item label="Loại bài thi" span={2}>
+                      {selectedExam.type || 'N/A'}
                     </Descriptions.Item>
-                    <Descriptions.Item label="Thời lượng">
-                      {selectedExam.duration} phút
+                    <Descriptions.Item label="Độ khó">
+                      {selectedExam.level || 'N/A'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Thời gian làm bài">
+                      {selectedExam.duration ? `${selectedExam.duration / 60} phút` : 'N/A'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Tổng số câu hỏi">
+                      {selectedExam.totalQuestions || selectedExam.totalQuestion || 0}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Phân bố câu hỏi">
+                      Dễ: {selectedExam.easyQuestion || 0}, Vừa: {selectedExam.mediumQuestion || 0}, Khó: {selectedExam.hardQuestion || 0}
                     </Descriptions.Item>
                   </Descriptions>
                 </Card>
               </Col>
-              
+
               <Col span={24}>
                 <Card title="Kết quả">
                   <Row gutter={16}>
                     <Col span={8}>
                       <Statistic
-                        title="Điểm số"
-                        value={selectedExam.score}
-                        suffix={`/${selectedExam.maxScore}`}
-                        valueStyle={{ color: getScoreColor(selectedExam.percentageScore) }}
+                        title="Điểm trung bình"
+                        value={selectedExam.avgScore || 0}
+                        precision={2}
+                        // suffix={`/${selectedExam.maxScore || 10}`}
+                        valueStyle={{ color: getScoreColor((selectedExam.avgScore || 0) * 10) }}
                       />
                     </Col>
+
                     <Col span={8}>
                       <Statistic
-                        title="Tỉ lệ %"
-                        value={selectedExam.percentageScore}
-                        suffix="%"
-                        valueStyle={{ color: getScoreColor(selectedExam.percentageScore) }}
-                      />
-                      <Progress 
-                        percent={selectedExam.percentageScore} 
-                        showInfo={false}
-                        strokeColor={getScoreColor(selectedExam.percentageScore)}
-                      />
-                    </Col>
-                    <Col span={8}>
-                      <Statistic
-                        title="Câu trả lời đúng"
-                        value={selectedExam.correctAnswers}
-                        suffix={`/${selectedExam.totalQuestions}`}
+                        title="Số lượt thi"
+                        value={selectedExam.totalAttempts || 0}
                       />
                     </Col>
                   </Row>
                   <Divider />
-                  <Space>
-                    <Text>Trạng thái: </Text>
-                    {getStatusTag(selectedExam.status)}
-                  </Space>
+
                 </Card>
               </Col>
             </Row>
@@ -928,7 +1092,6 @@ const ResultsPage: React.FC = () => {
         )}
       </Modal>
 
-      {/* Course Exam Stats Modal */}
       <Modal
         title="Thống kê bài thi theo khóa học"
         open={courseStatsVisible}
@@ -937,9 +1100,9 @@ const ResultsPage: React.FC = () => {
           <Button key="back" onClick={() => setcourseStatsVisible(false)}>
             Đóng
           </Button>,
-          <Button 
-            key="export" 
-            type="primary" 
+          <Button
+            key="export"
+            type="primary"
             icon={<ExportOutlined />}
             onClick={() => message.success('Đang xuất báo cáo...')}
           >
@@ -953,9 +1116,9 @@ const ResultsPage: React.FC = () => {
           renderItem={item => (
             <List.Item
               actions={[
-                <Button 
-                  key="view" 
-                  type="link" 
+                <Button
+                  key="view"
+                  type="link"
                   onClick={() => {
                     setFilterCourse(item.id);
                     setcourseStatsVisible(false);
@@ -970,9 +1133,9 @@ const ResultsPage: React.FC = () => {
                 description={`Môn học: ${item.subject}`}
               />
               <div>
-                <Statistic 
-                  title="Đã bán" 
-                  value={item.soldCount} 
+                <Statistic
+                  title="Đã bán"
+                  value={item.soldCount}
                   valueStyle={{ fontSize: '16px' }}
                 />
                 <Text type="secondary">
@@ -997,7 +1160,6 @@ const ResultsPage: React.FC = () => {
         </Row>
       </Modal>
 
-      {/* Student Learning Details Modal */}
       <Modal
         title="Chi tiết kết quả học tập"
         open={studentDetailsVisible}
@@ -1006,9 +1168,9 @@ const ResultsPage: React.FC = () => {
           <Button key="back" onClick={() => setStudentDetailsVisible(false)}>
             Đóng
           </Button>,
-          <Button 
-            key="export" 
-            type="primary" 
+          <Button
+            key="export"
+            type="primary"
             icon={<ExportOutlined />}
             onClick={() => message.success('Đang xuất báo cáo học tập...')}
           >
@@ -1023,109 +1185,144 @@ const ResultsPage: React.FC = () => {
               <Col span={24}>
                 <Card>
                   <Space align="start">
-                    <Avatar size={64} src={selectedStudent.avatar} icon={!selectedStudent.avatar && <UserOutlined />} />
+                    <Avatar
+                      size={64}
+                      src={selectedStudent.avatar || selectedStudent.image}
+                      icon={!selectedStudent.avatar && !selectedStudent.image && <UserOutlined />}
+                    />
                     <Space direction="vertical">
-                      <Title level={4} style={{ margin: 0 }}>{selectedStudent.studentName}</Title>
-                      <Text>{selectedStudent.studentId} | {selectedStudent.studentEmail}</Text>
-                      <Text type="secondary">Ngày đăng ký: {new Date(selectedStudent.enrollmentDate).toLocaleDateString('vi-VN')}</Text>
+                      <Title level={4} style={{ margin: 0 }}>
+                        {selectedStudent.fullname || ''}
+                      </Title>
+                      <Text>
+                        ID: {selectedStudent.accountId} |
+                        Email: {selectedStudent.email || ''}
+                      </Text>
+                      <Text type="secondary">
+                        Ngày đăng ký: {new Date(selectedStudent.enrollmentDate).toLocaleDateString('vi-VN')}
+                      </Text>
                     </Space>
                   </Space>
                 </Card>
               </Col>
-              
+
               <Col span={24}>
                 <Card title="Thông tin khóa học">
                   <Descriptions column={2} bordered>
-                    <Descriptions.Item label="Tên khóa học" span={2}>{selectedStudent.courseTitle}</Descriptions.Item>
+                    <Descriptions.Item label="Tên khóa học" span={2}>
+                      {selectedStudent.coursesTitle || ''}
+                    </Descriptions.Item>
                     <Descriptions.Item label="Trạng thái">
-                      {getCourseStatusTag(selectedStudent.completionStatus)}
+                      {getCourseStatusTag(
+                        selectedStudent.completionStatus ||
+                        ((selectedStudent.progressPercent || 0) >= 100 ? 'completed' :
+                          (selectedStudent.progressPercent || 0) > 0 ? 'in_progress' : 'not_started')
+                      )}
                     </Descriptions.Item>
                     <Descriptions.Item label="Tiến độ" span={2}>
                       <Space direction="vertical" style={{ width: '100%' }}>
                         <Space>
-                          <Text>{selectedStudent.progress}%</Text>
+                          <Text>{selectedStudent.progressPercent || selectedStudent.progress || 0}%</Text>
                           <Text type="secondary">hoàn thành</Text>
                         </Space>
-                        <Progress 
-                          percent={selectedStudent.progress} 
-                          status={selectedStudent.completionStatus === 'completed' ? 'success' : 'active'}
-                          strokeColor={selectedStudent.progress > 80 ? '#52c41a' : selectedStudent.progress > 50 ? '#1890ff' : '#faad14'}
+                        <Progress
+                          percent={selectedStudent.progressPercent || selectedStudent.progress || 0}
+                          status={
+                            (selectedStudent.completionStatus === 'completed' ||
+                              (selectedStudent.progressPercent || selectedStudent.progress || 0) >= 100)
+                              ? 'success' : 'active'
+                          }
+                          strokeColor={
+                            (selectedStudent.progressPercent || selectedStudent.progress || 0) > 80
+                              ? '#52c41a'
+                              : (selectedStudent.progressPercent || selectedStudent.progress || 0) > 50
+                                ? '#1890ff'
+                                : '#faad14'
+                          }
                         />
                       </Space>
                     </Descriptions.Item>
-                    <Descriptions.Item label="Điểm số" span={2}>
-                      <Statistic 
-                        value={selectedStudent.score} 
-                        suffix="/100"
-                        valueStyle={{ color: getScoreColor(selectedStudent.score) }}
+                    <Descriptions.Item label="Bài học hoàn thành" span={2}>
+                      <Text>{selectedStudent.lessonCompleted || 0}/{selectedStudent.totalLessons || 0} bài học</Text>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Chương hoàn thành" span={2}>
+                      <Text>{selectedStudent.chapterCompleted || 0}/{selectedStudent.totalChapters || 0} chương</Text>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Điểm trung bình" span={2}>
+                      <Statistic
+                        value={Number(selectedStudent.avgTestScore.toFixed(2)) || 0}
+                        suffix="/10"
+                        valueStyle={{
+                          color: getScoreColor((Number(selectedStudent.avgTestScore.toFixed(2)) || 0) * 10)
+                        }}
                       />
                     </Descriptions.Item>
-                  </Descriptions>
-                </Card>
-              </Col>
-              
-              <Col span={24}>
-                <Card title="Lịch sử học tập">
-                  <Timeline
-                    mode="left"
-                    items={studentActivities.map(activity => ({
-                      color: getActivityColor(activity.status),
-                      label: new Date(activity.date).toLocaleDateString('vi-VN'),
-                      children: (
+                    <Descriptions.Item label="Số bài kiểm tra đã làm" span={2}>
+                      <Text>{selectedStudent.testCount || 0}</Text>
+                    </Descriptions.Item>
+                    {selectedStudent.certificateCode && (
+                      <Descriptions.Item label="Chứng chỉ" span={2}>
                         <Space direction="vertical" style={{ width: '100%' }}>
                           <Space>
-                            {getActivityIcon(activity.type)}
-                            <Text strong>{activity.title}</Text>
-                          </Space>
-                          <Space>
-                            <Text type="secondary">
-                              <CalendarOutlined /> {new Date(activity.date).toLocaleTimeString('vi-VN')}
-                            </Text>
-                            {activity.score !== null && (
-                              <Text type="secondary">
-                                <TrophyOutlined /> Điểm: {activity.score}/100
-                              </Text>
+                            <Text>Mã: {selectedStudent.certificateCode}</Text>
+                            {selectedStudent.certificateVerified && (
+                              <Tag color="green">Đã xác thực</Tag>
                             )}
-                            {getStatusTag(activity.status)}
                           </Space>
+                          {selectedStudent.certificateUrl && (
+                            <>
+                              <div style={{ marginTop: '12px', marginBottom: '12px' }}>
+                                <img
+                                  src={selectedStudent.certificateUrl}
+                                  alt="Certificate Preview"
+                                  style={{ maxWidth: '100%', maxHeight: '200px', border: '1px solid #f0f0f0' }}
+                                />
+                              </div>
+                              <Space>
+                                <Button
+                                  type="primary"
+                                  icon={<EyeOutlined />}
+                                  onClick={() => window.open(selectedStudent.certificateUrl, '_blank')}
+                                >
+                                  Xem chứng chỉ
+                                </Button>
+                                <Button
+                                  icon={<DownloadOutlined />}
+                                  onClick={() => {
+                                    const urlParts = selectedStudent.certificateUrl?.split('.') || [];
+                                    const extension = urlParts.length > 1 ? urlParts[urlParts.length - 1].toLowerCase() : 'jpg';
+
+                                    fetch(selectedStudent.certificateUrl || '')
+                                      .then(response => response.blob())
+                                      .then(blob => {
+                                        const url = window.URL.createObjectURL(blob);
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        link.download = `Certificate-${selectedStudent.certificateCode}.${extension}`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                        window.URL.revokeObjectURL(url);
+                                        message.success('Đang tải chứng chỉ...');
+                                      })
+                                      .catch(error => {
+                                        console.error('Error downloading image:', error);
+                                        message.error('Không thể tải chứng chỉ.');
+                                      });
+                                  }}
+                                >
+                                  Tải về
+                                </Button>
+                              </Space>
+                            </>
+                          )}
+                          {!selectedStudent.certificateUrl && (
+                            <Text type="secondary">Chưa có file chứng chỉ</Text>
+                          )}
                         </Space>
-                      ),
-                    }))}
-                  />
-                </Card>
-              </Col>
-              
-              <Col span={24}>
-                <Card title="Thống kê tương tác">
-                  <Row gutter={16}>
-                    <Col span={8}>
-                      <Statistic
-                        title="Bài học đã hoàn thành"
-                        value={studentActivities.filter(a => a.type === 'lesson' && a.status === 'completed').length}
-                        suffix={`/${studentActivities.filter(a => a.type === 'lesson').length}`}
-                      />
-                    </Col>
-                    <Col span={8}>
-                      <Statistic
-                        title="Quiz đã làm"
-                        value={studentActivities.filter(a => a.type === 'quiz' && a.status === 'completed').length}
-                        suffix={`/${studentActivities.filter(a => a.type === 'quiz').length}`}
-                      />
-                    </Col>
-                    <Col span={8}>
-                      <Statistic
-                        title="Điểm trung bình"
-                        value={
-                          studentActivities
-                            .filter(a => a.score !== null)
-                            .reduce((acc, curr) => acc + (curr.score || 0), 0) / 
-                          studentActivities.filter(a => a.score !== null).length
-                        }
-                        precision={1}
-                        suffix="/100"
-                      />
-                    </Col>
-                  </Row>
+                      </Descriptions.Item>
+                    )}
+                  </Descriptions>
                 </Card>
               </Col>
             </Row>
@@ -1136,4 +1333,4 @@ const ResultsPage: React.FC = () => {
   );
 };
 
-export default ResultsPage; 
+export default ResultsPage;

@@ -154,7 +154,7 @@ interface Category {
 }
 // API Endpoints
 const ADMIN_GETALL_RESULT = `${process.env.REACT_APP_SERVER_HOST}/api/courses/all-get-result-search`;
-const ADMIN_GET_COURSE_OF_ACCOUNT = `${process.env.REACT_APP_SERVER_HOST}/api/courses/get-courseDTO-of-account`;
+// const ADMIN_GET_COURSE_OF_ACCOUNT = `${process.env.REACT_APP_SERVER_HOST}/api/courses/get-courseDTO-of-account`;
 
 const CoursesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -254,7 +254,8 @@ const CoursesPage: React.FC = () => {
     const apiEndpoint = roleId === 1
       ? `${ADMIN_GETALL_RESULT}?${params.toString()}`
       : roleId === 3
-        ? `${ADMIN_GET_COURSE_OF_ACCOUNT}/${accountId}?${params.toString()}`
+        ? `${ADMIN_GETALL_RESULT}?${params.toString()}`
+        // ? `${ADMIN_GET_COURSE_OF_ACCOUNT}/${accountId}?${params.toString()}`
         : null;
 
     if (!apiEndpoint) {

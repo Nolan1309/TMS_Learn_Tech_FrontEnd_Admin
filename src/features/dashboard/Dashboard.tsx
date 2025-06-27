@@ -25,19 +25,17 @@ interface ApiDataPoint {
 }
 
 interface ExamData {
-  title: string;
-  image: string;
-  subject: string;
-  participants: number;
-}
-
-interface ApiExamData {
   testId: number;
   title: string;
   imageUrl: string | null;
   subject: string;
   subjectId: string;
   participants: string;
+}
+
+interface ApiExamDataDashboard {
+  totalExams: number;
+  examData: ExamData[];
 }
 
 interface CategoryData {
@@ -61,30 +59,45 @@ interface ApiMonthlyData {
   total: number;
 }
 
+interface ApiCourseDataDashboard {
+  totalStudentsCourses: number;
+  totalCourses: number;
+  courseData: CourseData[];
+}
+
 interface CourseData {
   key: string;
   name: string;
-  students: number;
-  rating: number;
-  revenue: string;
-}
-
-interface ApiCourseData {
-  key: string;
-  name: string;
   studentCount: number;
-  rating: number | null;
+  rating: number;
   revenue: number;
 }
 
-interface ApiResponse<T> {
+// Original ApiResponse for array data
+interface ApiArrayResponse<T> {
   status: number;
   message: string;
   data: T[];
 }
 
+// New ApiResponse for object data
+interface ApiObjectResponse<T> {
+  status: number;
+  message: string;
+  data: T;
+}
+
+interface ApiResponse<T> {
+  status: number;
+  message: string;
+  data: T;
+}
+
 const Dashboard: React.FC = () => {
   const [revenueData, setRevenueData] = useState<DataPoint[]>([]);
+  const [totalStudentsCourses, setTotalStudentsCourses] = useState<number>(0);
+  const [totalCourses, setTotalCourses] = useState<number>(0);
+  const [totalExams, setTotalExams] = useState<number>(0);
   const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
   const [newStudentsData, setNewStudentsData] = useState<MonthlyData[]>([]);
   const [examData, setExamData] = useState<ExamData[]>([]);
@@ -95,8 +108,8 @@ const Dashboard: React.FC = () => {
 
   // Format currency function
   const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat('vi-VN', { 
-      style: 'currency', 
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
       currency: 'VND',
       maximumFractionDigits: 0
     }).format(value);
@@ -139,16 +152,16 @@ const Dashboard: React.FC = () => {
       category: 'Doanh thu',
       formattedValue: formatVND(item.value)
     }));
-    
+
     // Sort by month
     transformedData.sort((a, b) => {
       const monthA = parseInt(a.month.replace('Tháng ', ''));
       const monthB = parseInt(b.month.replace('Tháng ', ''));
       return monthA - monthB;
     });
-    
+
     setRevenueData(transformedData);
-    
+
     // Calculate total revenue
     const total = sampleResponse.data.reduce((sum, item) => sum + item.value, 0);
     setTotalRevenue(total);
@@ -162,13 +175,13 @@ const Dashboard: React.FC = () => {
       try {
         // Get token from local storage
         const token = localStorage.getItem('authToken');
-        
-        const response = await axios.get<ApiResponse<ApiDataPoint>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/data-point`, {
+
+        const response = await axios.get<ApiArrayResponse<ApiDataPoint>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/data-point`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        
+
         if (response.data.status === 200) {
           // Transform data for the revenue chart
           const transformedData: DataPoint[] = response.data.data.map(item => ({
@@ -177,19 +190,33 @@ const Dashboard: React.FC = () => {
             category: 'Doanh thu', // Add default category since it's not in the API response
             formattedValue: formatVND(item.value) // Pre-format the value for tooltip
           }));
-          
-          // Sort by month
+
+          // Sort by month (most recent last)
           transformedData.sort((a, b) => {
             const monthA = parseInt(a.month.replace('Tháng ', ''));
             const monthB = parseInt(b.month.replace('Tháng ', ''));
             return monthA - monthB;
           });
-          
+
           setRevenueData(transformedData);
-          
-          // Calculate total revenue
-          const total = response.data.data.reduce((sum, item) => sum + item.value, 0);
-          setTotalRevenue(total);
+
+          // Find the most recent month's revenue (last item after sorting)
+          if (response.data.data.length > 0) {
+            // First sort the raw data by year and month
+            const sortedData = [...response.data.data].sort((a, b) => {
+              const [yearA, monthA] = a.month.split('-').map(Number);
+              const [yearB, monthB] = b.month.split('-').map(Number);
+
+              if (yearA !== yearB) return yearA - yearB;
+              return monthA - monthB;
+            });
+
+            // Get the most recent month's revenue (last item after sorting)
+            const latestMonthRevenue = sortedData[sortedData.length - 1].value;
+            setTotalRevenue(latestMonthRevenue);
+          } else {
+            setTotalRevenue(0);
+          }
         }
       } catch (error) {
         console.error('Error fetching revenue data:', error);
@@ -200,13 +227,13 @@ const Dashboard: React.FC = () => {
       try {
         // Get token from local storage
         const token = localStorage.getItem('authToken');
-        
-        const response = await axios.get<ApiResponse<ApiMonthlyData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/monthly`, {
+
+        const response = await axios.get<ApiArrayResponse<ApiMonthlyData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/monthly`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        
+
         if (response.data.status === 200) {
           // Transform API data to match our MonthlyData interface
           const transformedData: MonthlyData[] = response.data.data.map(item => ({
@@ -217,7 +244,6 @@ const Dashboard: React.FC = () => {
         }
       } catch (error) {
         console.error('Error fetching monthly data:', error);
-       
       }
     };
 
@@ -225,31 +251,33 @@ const Dashboard: React.FC = () => {
       try {
         // Get token from local storage
         const token = localStorage.getItem('authToken');
-        
-        const response = await axios.get<ApiResponse<ApiExamData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/exam-data`, {
+
+        const response = await axios.get<ApiObjectResponse<ApiExamDataDashboard>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/exam-data`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        
+
         if (response.data.status === 200) {
           // Transform API data to match our ExamData interface
-          const transformedData: ExamData[] = response.data.data
-            .map(item => ({
+          const transformedData: ExamData[] = response.data.data.examData
+            .map((item: any) => ({
+              testId: item.testId,
               title: item.title,
-              image: item.imageUrl || getDefaultImageForSubject(item.subject),
+              imageUrl: item.imageUrl || getDefaultImageForSubject(item.subject),
               subject: item.subject,
-              participants: parseInt(item.participants) || 0
+              subjectId: item.subjectId,
+              participants: item.participants
             }))
             // Sort by participants in descending order and take top 5
-            .sort((a, b) => b.participants - a.participants)
+            .sort((a, b) => parseInt(b.participants) - parseInt(a.participants))
             .slice(0, 5);
-          
+
+          setTotalExams(response.data.data.totalExams);
           setExamData(transformedData);
         }
       } catch (error) {
         console.error('Error fetching exam data:', error);
-        
       }
     };
 
@@ -257,13 +285,13 @@ const Dashboard: React.FC = () => {
       try {
         // Get token from local storage
         const token = localStorage.getItem('authToken');
-        
-        const response = await axios.get<ApiResponse<ApiCategoryData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/categories`, {
+
+        const response = await axios.get<ApiArrayResponse<ApiCategoryData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/categories`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        
+
         if (response.data.status === 200) {
           // Transform API data to match our CategoryData interface
           const transformedData: CategoryData[] = response.data.data
@@ -274,7 +302,7 @@ const Dashboard: React.FC = () => {
             }))
             // Sort by value in descending order
             .sort((a, b) => b.value - a.value);
-          
+
           // If we have data, use it; otherwise add a default entry
           if (transformedData.length > 0) {
             setCategoryData(transformedData);
@@ -284,7 +312,6 @@ const Dashboard: React.FC = () => {
         }
       } catch (error) {
         console.error('Error fetching category data:', error);
-       
       }
     };
 
@@ -292,37 +319,40 @@ const Dashboard: React.FC = () => {
       try {
         // Get token from local storage
         const token = localStorage.getItem('authToken');
-        
-        const response = await axios.get<ApiResponse<ApiCourseData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/courses`, {
+
+        const response = await axios.get<ApiObjectResponse<ApiCourseDataDashboard>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/courses`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        
+
         if (response.data.status === 200) {
+          // Extract totalCourses and totalStudentsCourses from the response
+          const { totalCourses, totalStudentsCourses, courseData: coursesData } = response.data.data;
+
+          // Update state with these values
+          setTotalCourses(totalCourses);
+          setTotalStudentsCourses(totalStudentsCourses);
+
           // Transform API data to match our CourseData interface
-          const transformedData: CourseData[] = response.data.data
+          const transformedData: CourseData[] = coursesData
             .filter(item => item.studentCount > 0 || item.revenue > 0) // Filter out courses with no students and no revenue
+            // Sort by revenue in descending order first
+            .sort((a, b) => b.revenue - a.revenue)
             .map(item => ({
               key: item.key,
               name: item.name,
-              students: item.studentCount,
+              studentCount: item.studentCount,
               rating: item.rating || 0, // Use 0 if rating is null
-              revenue: formatVND(item.revenue)
-            }))
-            // Sort by revenue in descending order
-            .sort((a, b) => parseFloat(b.revenue.replace(/[^\d.-]/g, '')) - parseFloat(a.revenue.replace(/[^\d.-]/g, '')));
-          
+              revenue: item.revenue
+            }));
+
           setCourseData(transformedData);
-          
-          // Calculate total students across all courses
-          const total = response.data.data.reduce((sum, course) => sum + course.studentCount, 0);
-          setTotalStudents(total);
         }
       } catch (error) {
         console.error('Error fetching course data:', error);
-        
-        setTotalStudents(0);
+        setTotalStudentsCourses(0);
+        setTotalCourses(0);
       }
     };
 
@@ -363,15 +393,15 @@ const Dashboard: React.FC = () => {
     },
     {
       title: 'Học viên',
-      dataIndex: 'students',
+      dataIndex: 'studentCount',
       key: 'students',
-      sorter: (a: any, b: any) => a.students - b.students,
+      sorter: (a: CourseData, b: CourseData) => a.studentCount - b.studentCount,
     },
     {
       title: 'Đánh giá',
       dataIndex: 'rating',
       key: 'rating',
-      sorter: (a: any, b: any) => a.rating - b.rating,
+      sorter: (a: CourseData, b: CourseData) => (a.rating || 0) - (b.rating || 0),
       render: (rating: number) => (
         <span>
           {rating > 0 ? rating.toFixed(1) : 'N/A'} {rating > 0 && <span style={{ color: '#fadb14' }}>★</span>}
@@ -382,6 +412,7 @@ const Dashboard: React.FC = () => {
       title: 'Doanh thu',
       dataIndex: 'revenue',
       key: 'revenue',
+      render: (revenue: number) => formatVND(revenue),
     },
   ];
 
@@ -454,23 +485,13 @@ const Dashboard: React.FC = () => {
   return (
     <div>
       <Title level={2}>Dashboard</Title>
-      
-      {/* Add a test button in development only */}
-      {process.env.NODE_ENV === 'development' && (
-        <Button 
-          onClick={testWithSampleData} 
-          style={{ marginBottom: 16 }}
-        >
-          Test with Sample Data
-        </Button>
-      )}
-      
+
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
               title="Tổng học viên"
-              value={totalStudents}
+              value={totalStudentsCourses}
               valueStyle={{ color: '#3f8600' }}
             />
           </Card>
@@ -479,7 +500,7 @@ const Dashboard: React.FC = () => {
           <Card>
             <Statistic
               title="Khóa học đang hoạt động"
-              value={56}
+              value={totalCourses}
               valueStyle={{ color: '#1890ff' }}
             />
           </Card>
@@ -487,16 +508,16 @@ const Dashboard: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="Tài liệu"
-              value={324}
-              valueStyle={{ color: '#722ed1' }}
+              title="Đề thi"
+              value={totalExams}
+              valueStyle={{ color: '#fa541c' }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="Doanh thu tháng"
+              title="Doanh thu tháng hiện tại"
               value={totalRevenue / 1000000}
               precision={2}
               suffix="triệu VNĐ"
@@ -539,20 +560,25 @@ const Dashboard: React.FC = () => {
         </Col>
         <Col xs={24} lg={12}>
           <Card title="Đề thi nổi bật">
-            <List
-              itemLayout="horizontal"
-              dataSource={examData}
-              renderItem={(item) => (
-                <List.Item>
-                  <List.Item.Meta
-                    avatar={<Avatar src={item.image} />}
-                    title={item.title}
-                    description={`${item.subject}`}
-                  />
-                  <div style={{ color: '#8c8c8c' }}>{item.participants} thí sinh</div>
-                </List.Item>
-              )}
-            />
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '50px 0' }}>Đang tải dữ liệu...</div>
+            ) : (
+              <List
+                itemLayout="horizontal"
+                dataSource={examData}
+                renderItem={(item) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      avatar={<Avatar src={item.imageUrl || 'https://img.icons8.com/color/48/000000/code.png'} />}
+                      title={item.title}
+                      description={`${item.subject}`}
+                    />
+                    <div style={{ color: '#8c8c8c' }}>{item.participants} sinh viên</div>
+                  </List.Item>
+                )}
+              />
+            )}
+
           </Card>
         </Col>
       </Row>
@@ -560,10 +586,10 @@ const Dashboard: React.FC = () => {
       <Row gutter={[16, 16]} style={{ marginTop: '24px' }}>
         <Col xs={24}>
           <Card title="Khóa học nổi bật">
-            <Table 
-              dataSource={courseData} 
-              columns={columns} 
-              pagination={false} 
+            <Table
+              dataSource={courseData}
+              columns={columns}
+              pagination={false}
               size="middle"
             />
           </Card>

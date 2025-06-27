@@ -118,10 +118,10 @@ const Login: React.FC = () => {
     setShowPassword(!showPassword);
   };
 
-  const googleLogin = () => {
-    // Redirect user to Google OAuth endpoint
-    window.location.href = `${process.env.REACT_APP_SERVER_HOST || 'http://localhost:8080'}/oauth2/authorization/google`;
-  };
+  // const googleLogin = () => {
+  //   // Redirect user to Google OAuth endpoint
+  //   window.location.href = `${process.env.REACT_APP_SERVER_HOST || 'http://localhost:8080'}/oauth2/authorization/google`;
+  // };
 
   return (
     <div className="form-body without-side">
@@ -179,21 +179,21 @@ const Login: React.FC = () => {
                   <button id="submit" type="submit" className="ibtn">
                     Login
                   </button>
-                  <a href="/forgot-password" className="btn-forget">
+                  {/* <a href="/forgot-password" className="btn-forget">
                     Quên mật khẩu?
-                  </a>
+                  </a> */}
                 </div>
               </form>
-              <div className="other-links">
+              {/* <div className="other-links">
                 <div className="text">Hoặc đăng nhập</div>
 
                 <a href="#" onClick={googleLogin}>
                   <i className="fab fa-google"></i>Google
                 </a>
-              </div>
-              <div className="page-links">
+              </div> */}
+              {/* <div className="page-links">
                 <a href="/dang-ky">Đăng kí tài khoản mới</a>
-              </div>
+              </div> */}
             </div>
             <div className="form-sent">Form Sent</div>
           </div>

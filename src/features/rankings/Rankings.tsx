@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Tabs, Card, Typography } from 'antd';
-import InstructorRankings from './InstructorRankings';
+// import InstructorRankings from './InstructorRankings';
 import StudentRankings from './StudentRankings';
 import RewardManagement from './RewardManagement';
 import {
@@ -26,12 +26,12 @@ const Rankings: React.FC = () => {
       
       <Card bordered={false} className="ranking-card">
         <Tabs activeKey={activeTab} onChange={handleTabChange}>
-          <TabPane 
+          {/* <TabPane 
             tab={<span><TrophyOutlined /> Xếp hạng giảng viên</span>} 
             key="instructor"
           >
             <InstructorRankings />
-          </TabPane>
+          </TabPane> */}
           <TabPane 
             tab={<span><UserOutlined /> Xếp hạng học viên</span>} 
             key="student"

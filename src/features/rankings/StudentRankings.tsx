@@ -67,8 +67,7 @@ interface PaginationParams {
 }
 
 
-// API URL
-const API_URL = 'http://localhost:8080/api';
+
 
 const StudentRankings: React.FC = () => {
   const [currentTimeframe, setCurrentTimeframe] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY');
