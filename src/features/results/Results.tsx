@@ -138,7 +138,9 @@ const ResultsPage: React.FC = () => {
   const [searchTextCourse, setSearchTextCourse] = useState<string>(''); // search keyword for course tab
   const [searchTextExam, setSearchTextExam] = useState<string>('');   // search keyword for exam tab
 
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  // Row selection states
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]); // exam table
+  const [selectedCourseRowKeys, setSelectedCourseRowKeys] = useState<React.Key[]>([]); // course table
   const [filterCourse, setFilterCourse] = useState<string>('all');
   const [filterCourseLearning, setFilterCourseLearning] = useState<string>('all');
   const [activeResultType, setActiveResultType] = useState<'exam' | 'course'>('course');
@@ -170,6 +172,8 @@ const ResultsPage: React.FC = () => {
   const examFilterRef = React.useRef<any>(null);
   const courseFilterRef = React.useRef<any>(null);
 
+  const [exportCourseModalVisible, setExportCourseModalVisible] = useState<boolean>(false);
+  const [selectedExportCourseIds, setSelectedExportCourseIds] = useState<string[]>([]);
 
   useEffect(() => {
     fetchCourseList();
@@ -332,6 +336,10 @@ const ResultsPage: React.FC = () => {
     setSelectedRowKeys(newSelectedRowKeys);
   };
 
+  const onCourseSelectChange = (newSelectedRowKeys: React.Key[]) => {
+    setSelectedCourseRowKeys(newSelectedRowKeys);
+  };
+
   // Export selected exam results to Excel
   const downloadResults = async () => {
     if (activeResultType !== 'exam') return;
@@ -380,6 +388,69 @@ const ResultsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Export course learning results to Excel
+  const downloadCourseResults = async (courseIds: string[]) => {
+    if (activeResultType !== 'course') return;
+
+    try {
+      setLoading(true);
+      const token = await authTokenLogin(refreshToken, refresh, navigate);
+      if (!token) {
+        message.error('Không xác thực được người dùng');
+        return;
+      }
+
+      const response = await fetch(
+        `${process.env.REACT_APP_SERVER_HOST}/api/courses/result/export-excel`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(courseIds),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Xuất tệp Excel thất bại');
+      }
+
+      const blob = await response.blob();
+      const urlBlob = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = urlBlob;
+      link.download = `CourseResults_${new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[:T]/g, '-')}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(urlBlob);
+      message.success('Đã xuất file Excel thành công');
+    } catch (err: any) {
+      console.error(err);
+      message.error(err.message || 'Không thể xuất tệp Excel');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const showExportCourseModal = () => {
+    setSelectedExportCourseIds([]);
+    setExportCourseModalVisible(true);
+  };
+
+  const handleExportCourse = () => {
+    if (selectedExportCourseIds.length === 0) {
+      message.warning('Vui lòng chọn ít nhất một khóa học');
+      return;
+    }
+    setExportCourseModalVisible(false);
+    downloadCourseResults(selectedExportCourseIds);
   };
 
   // Get status tag for course completion
@@ -762,6 +833,11 @@ const ResultsPage: React.FC = () => {
     onChange: onSelectChange,
   };
 
+  const rowSelectionCourse = {
+    selectedRowKeys: selectedCourseRowKeys,
+    onChange: onCourseSelectChange,
+  };
+
   const fetchExamResults = async (page: number, size: number) => {
     setLoading(true);
     const token = await authTokenLogin(refreshToken, refresh, navigate);
@@ -884,7 +960,10 @@ const ResultsPage: React.FC = () => {
           <Card style={{ marginBottom: 16 }}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
-                <Button icon={<ExportOutlined />}>
+                <Button
+                  icon={<ExportOutlined />}
+                  onClick={showExportCourseModal}
+                >
                   Xuất dữ liệu
                 </Button>
                 <Space>
@@ -915,6 +994,7 @@ const ResultsPage: React.FC = () => {
                 dataSource={courseStudents}
                 rowKey="id"
                 loading={loading}
+                rowSelection={rowSelectionCourse}
                 pagination={{
                   current: currentPage + 1,
                   pageSize: pageSize,
@@ -1328,6 +1408,37 @@ const ResultsPage: React.FC = () => {
             </Row>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        title="Chọn khóa học để xuất"
+        open={exportCourseModalVisible}
+        onCancel={() => setExportCourseModalVisible(false)}
+        footer={[
+          <Button key="back" onClick={() => setExportCourseModalVisible(false)}>
+            Đóng
+          </Button>,
+          <Button
+            key="export"
+            type="primary"
+            icon={<ExportOutlined />}
+            onClick={handleExportCourse}
+          >
+            Xuất báo cáo
+          </Button>,
+        ]}
+      >
+        <Select
+          mode="multiple"
+          placeholder="Chọn khóa học"
+          style={{ width: '100%' }}
+          value={selectedExportCourseIds}
+          onChange={(value) => setSelectedExportCourseIds(value as string[])}
+        >
+          {courses.map(course => (
+            <Option key={course.id} value={course.id}>{course.title}</Option>
+          ))}
+        </Select>
       </Modal>
     </div>
   );

@@ -10,6 +10,7 @@ import {
   LineChartOutlined, PieChartOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { Line, Column, Pie } from '@ant-design/plots';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -121,130 +122,61 @@ const StatisticsPage: React.FC = () => {
 
   // -------------------- API FETCHING --------------------
   useEffect(() => {
-    const fetchRevenueData = async () => {
-      try {
-        const token = localStorage.getItem('authToken');
-        const response = await axios.get<ApiResponse<ApiDataPoint>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/data-point`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (response.data.status === 200) {
-          const transformed: DataPoint[] = response.data.data.map(item => ({
-            month: formatMonthFromApi(item.month),
-            value: item.value,
-            category: 'Doanh thu',
-            formattedValue: formatVND(item.value)
-          })).sort((a, b) => {
-            const mA = parseInt(a.month.replace('Tháng ', ''));
-            const mB = parseInt(b.month.replace('Tháng ', ''));
-            return mA - mB;
-          });
-          setRevenueData(transformed);
-          const total = response.data.data.reduce((sum, itm) => sum + itm.value, 0);
-          setTotalRevenue(total);
-        }
-      } catch (err) {
-        console.error('Error fetching revenue data', err);
-      }
-    };
+    // ------------------ DUMMY DATA ------------------
+    setLoading(true);
 
-    const fetchMonthlyData = async () => {
-      try {
-        const token = localStorage.getItem('authToken');
-        const response = await axios.get<ApiResponse<ApiMonthlyData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/monthly`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (response.data.status === 200) {
-          const transformed: MonthlyData[] = response.data.data.map(item => ({
-            month: formatMonthFromApi(item.month),
-            value: item.total
-          }));
-          setNewStudentsData(transformed);
-        }
-      } catch (err) {
-        console.error('Error fetching monthly data', err);
-      }
-    };
+    const dummyRevenue: DataPoint[] = [
+      { month: 'Tháng 1', value: 10000000, category: 'Doanh thu', formattedValue: formatVND(10000000) },
+      { month: 'Tháng 2', value: 8000000, category: 'Doanh thu', formattedValue: formatVND(8000000) },
+      { month: 'Tháng 3', value: 12000000, category: 'Doanh thu', formattedValue: formatVND(12000000) },
+    ];
+    setRevenueData(dummyRevenue);
+    setTotalRevenue(dummyRevenue.reduce((sum, r) => sum + r.value, 0));
 
-    const getDefaultImageForSubject = (subject: string): string => {
-      const s = subject.toLowerCase();
-      if (s.includes('python')) return 'https://img.icons8.com/color/48/000000/python.png';
-      if (s.includes('java')) return 'https://img.icons8.com/color/48/000000/java-coffee-cup-logo.png';
-      if (s.includes('javascript') || s.includes('js')) return 'https://img.icons8.com/color/48/000000/javascript.png';
-      if (s.includes('c#') || s.includes('csharp')) return 'https://img.icons8.com/color/48/000000/c-sharp-logo.png';
-      if (s.includes('web') || s.includes('html') || s.includes('css')) return 'https://img.icons8.com/color/48/000000/html-5.png';
-      return 'https://img.icons8.com/color/48/000000/code.png';
-    };
+    setNewStudentsData([
+      { month: 'Tháng 1', value: 120 },
+      { month: 'Tháng 2', value: 150 },
+      { month: 'Tháng 3', value: 180 },
+    ]);
 
-    const fetchExamData = async () => {
-      try {
-        const token = localStorage.getItem('authToken');
-        const response = await axios.get<ApiResponse<ApiExamData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/exam-data`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (response.data.status === 200) {
-          const transformed: ExamData[] = response.data.data.map(item => ({
-            title: item.title,
-            image: item.imageUrl || getDefaultImageForSubject(item.subject),
-            subject: item.subject,
-            participants: parseInt(item.participants) || 0
-          })).sort((a, b) => b.participants - a.participants).slice(0, 5);
-          setExamData(transformed);
-        }
-      } catch (err) {
-        console.error('Error fetching exam data', err);
-      }
-    };
+    setExamData([
+      { title: 'Đề Python cơ bản', image: 'https://img.icons8.com/color/48/000000/python.png', subject: 'Python', participants: 95 },
+      { title: 'Đề Java nâng cao', image: 'https://img.icons8.com/color/48/000000/java-coffee-cup-logo.png', subject: 'Java', participants: 80 },
+      { title: 'Đề HTML & CSS', image: 'https://img.icons8.com/color/48/000000/html-5.png', subject: 'Web', participants: 110 },
+    ]);
 
-    const fetchCategoryData = async () => {
-      try {
-        const token = localStorage.getItem('authToken');
-        const response = await axios.get<ApiResponse<ApiCategoryData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/categories`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (response.data.status === 200) {
-          let transformed: CategoryData[] = response.data.data.filter(item => item.total > 0).map(item => ({
-            type: item.category,
-            value: item.total
-          })).sort((a, b) => b.value - a.value);
-          if (transformed.length === 0) transformed = [{ type: 'Không có dữ liệu', value: 1 }];
-          setCategoryData(transformed);
-        }
-      } catch (err) {
-        console.error('Error fetching category data', err);
-      }
-    };
+    setCategoryData([
+      { type: 'Lập trình', value: 60 },
+      { type: 'Thiết kế', value: 25 },
+      { type: 'Ngoại ngữ', value: 15 },
+    ]);
 
-    const fetchCourseData = async () => {
-      try {
-        const token = localStorage.getItem('authToken');
-        const response = await axios.get<ApiResponse<ApiCourseData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/courses`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (response.data.status === 200) {
-          const transformed: CourseData[] = response.data.data.filter(item => item.studentCount > 0 || item.revenue > 0).map(item => ({
-            key: item.key,
-            name: item.name,
-            students: item.studentCount,
-            rating: item.rating || 0,
-            revenue: formatVND(item.revenue)
-          })).sort((a, b) => parseFloat(b.revenue.replace(/[\D]/g, '')) - parseFloat(a.revenue.replace(/[\D]/g, '')));
-          setCourseData(transformed);
-          const total = response.data.data.reduce((sum, c) => sum + c.studentCount, 0);
-          setTotalStudents(total);
-        }
-      } catch (err) {
-        console.error('Error fetching course data', err);
-        setTotalStudents(0);
-      }
-    };
+    const dummyCourses: CourseData[] = [
+      { key: 'C1', name: 'Khóa ReactJS', students: 200, rating: 4.7, revenue: formatVND(9000000) },
+      { key: 'C2', name: 'Khóa NodeJS', students: 150, rating: 4.5, revenue: formatVND(7500000) },
+      { key: 'C3', name: 'Khóa UI/UX Design', students: 180, rating: 4.8, revenue: formatVND(8200000) },
+    ];
+    setCourseData(dummyCourses);
+    setTotalStudents(dummyCourses.reduce((s, c) => s + c.students, 0));
 
-    const loadAll = async () => {
-      setLoading(true);
-      await Promise.all([fetchRevenueData(), fetchMonthlyData(), fetchExamData(), fetchCategoryData(), fetchCourseData()]);
-      setLoading(false);
-    };
+    const dummyTop: TopCourse[] = dummyCourses.map(c => ({
+      id: c.key,
+      name: c.name,
+      students: c.students,
+      revenue: parseInt(c.revenue.replace(/\D/g, '')),
+      rating: c.rating,
+      status: 'active',
+      trend: 'stable',
+      author: 'Admin',
+    }));
+    setTopCourses(dummyTop);
 
-    loadAll();
+    setNewStudentList([
+      { id: 'S1', name: 'Nguyễn Văn A', enrollDate: '2025-05-01', courseName: 'Khóa ReactJS', paymentStatus: 'paid', amount: 1200000, source: 'Website' },
+      { id: 'S2', name: 'Trần Thị B', enrollDate: '2025-05-03', courseName: 'Khóa NodeJS', paymentStatus: 'pending', amount: 900000, source: 'Facebook' },
+    ]);
+
+    setLoading(false);
   }, []);
 
   const handleTimeRangeChange = (value: string) => {
@@ -523,17 +455,22 @@ const StatisticsPage: React.FC = () => {
             tab={<span><LineChartOutlined /> Doanh thu theo thời gian</span>}
             key="revenue"
           >
-            <div style={{ height: 400, padding: '20px 0' }}>
-              <div style={{ textAlign: 'center', marginTop: 120 }}>
-                <LineChartOutlined style={{ fontSize: 48, color: '#1890ff' }} />
-                <Title level={4} style={{ marginTop: 16 }}>Biểu đồ doanh thu theo thời gian</Title>
-                <Text type="secondary">
-                  Cài đặt thư viện recharts để hiển thị biểu đồ này.
-                  <br />
-                  Dữ liệu: doanh thu theo tháng từ T1 đến T12
-                </Text>
-              </div>
-            </div>
+            {loading ? (
+              <div style={{ textAlign: 'center', paddingTop: 120 }}>Đang tải dữ liệu...</div>
+            ) : (
+              <Line
+                data={revenueData}
+                xField="month"
+                yField="value"
+                seriesField="category"
+                smooth
+                color="#1890ff"
+                height={400}
+                padding="auto"
+                yAxis={{ label: { formatter: (v: string) => `${(parseFloat(v) / 1_000_000).toFixed(1)}M` } }}
+                tooltip={{ fields: ['month', 'formattedValue'], formatter: (d: any) => ({ name: 'Doanh thu', value: d.formattedValue }) }}
+              />
+            )}
           </TabPane>
           <TabPane
             tab={<span><BarChartOutlined /> Doanh thu theo danh mục</span>}
@@ -541,30 +478,34 @@ const StatisticsPage: React.FC = () => {
           >
             <Row gutter={16}>
               <Col span={12}>
-                <div style={{ height: 400, padding: '20px 0' }}>
-                  <div style={{ textAlign: 'center', marginTop: 120 }}>
-                    <BarChartOutlined style={{ fontSize: 48, color: '#52c41a' }} />
-                    <Title level={4} style={{ marginTop: 16 }}>Biểu đồ cột theo danh mục</Title>
-                    <Text type="secondary">
-                      Cài đặt thư viện recharts để hiển thị biểu đồ này.
-                      <br />
-                      Dữ liệu: doanh thu theo các danh mục khóa học
-                    </Text>
-                  </div>
-                </div>
+                {loading ? (
+                  <div style={{ textAlign: 'center', paddingTop: 120 }}>Đang tải dữ liệu...</div>
+                ) : (
+                  <Column
+                    data={categoryData}
+                    xField="type"
+                    yField="value"
+                    color="#52c41a"
+                    height={400}
+                    label={{ style: { fill: '#fff' } }}
+                  />
+                )}
               </Col>
               <Col span={12}>
-                <div style={{ height: 400, padding: '20px 0' }}>
-                  <div style={{ textAlign: 'center', marginTop: 120 }}>
-                    <PieChartOutlined style={{ fontSize: 48, color: '#722ed1' }} />
-                    <Title level={4} style={{ marginTop: 16 }}>Biểu đồ tròn theo danh mục</Title>
-                    <Text type="secondary">
-                      Cài đặt thư viện recharts để hiển thị biểu đồ này.
-                      <br />
-                      Dữ liệu: phân bổ doanh thu theo danh mục
-                    </Text>
-                  </div>
-                </div>
+                {loading ? (
+                  <div style={{ textAlign: 'center', paddingTop: 120 }}>Đang tải dữ liệu...</div>
+                ) : (
+                  <Pie
+                    data={categoryData}
+                    angleField="value"
+                    colorField="type"
+                    radius={0.8}
+                    innerRadius={0.5}
+                    height={400}
+                    legend={{ position: 'bottom' }}
+                    label={false}
+                  />
+                )}
               </Col>
             </Row>
           </TabPane>
