@@ -17,20 +17,7 @@ const { Option } = Select;
 const { TabPane } = Tabs;
 const { RangePicker } = DatePicker;
 
-interface StatisticsData {
-  totalRevenue: number;
-  totalStudents: number;
-  totalCourses: number;
-  totalDocuments: number;
-  revenueGrowth: number;
-  studentsGrowth: number;
-  coursesGrowth: number;
-  documentsGrowth: number;
-  monthlySales: { month: string; value: number }[];
-  topCourses: TopCourse[];
-  categorySales: { category: string; value: number }[];
-  newStudents: NewStudent[];
-}
+
 
 interface TopCourse {
   id: string;
@@ -48,9 +35,7 @@ interface NewStudent {
   name: string;
   enrollDate: string;
   courseName: string;
-  paymentStatus: 'paid' | 'pending' | 'failed';
-  amount: number;
-  source: string;
+  enrollmentStatus: string;
 }
 
 // -------------------- API & Helper Types --------------------
@@ -63,25 +48,31 @@ interface ApiResponse<T> {
 interface ApiDataPoint { month: string; value: number; }
 interface ApiMonthlyData { month: string; total: number; }
 interface ApiExamData { title: string; imageUrl?: string; subject: string; participants: string; }
-interface ApiCategoryData { category: string; total: number; }
+interface ApiCategoryCourseData { categoryId: number; category: string; revenue: number; }
+interface ApiCategoryExamData { courseId: number; courseName: string; totalPayments: number; revenue: number; }
+interface ApiCourseDataDashboard { totalCourses: number; totalStudentsCourses: number; courseData: ApiCourseData[]; }
 interface ApiCourseData { key: string; name: string; studentCount: number; rating?: number; revenue: number; }
+interface ApiObjectResponse<T> {
+  status: number;
+  message: string;
+  data: T;
+}
 
 // Client side data structures
 interface DataPoint { month: string; value: number; category: string; formattedValue: string; }
-interface MonthlyData { month: string; value: number; }
-interface ExamData { title: string; image: string; subject: string; participants: number; }
 interface CategoryData { type: string; value: number; }
 interface CourseData { key: string; name: string; students: number; rating: number; revenue: string; }
 
-// -------------------- Helper functions --------------------
-const formatMonthFromApi = (monthStr: string): string => {
-  // Expecting YYYY-MM format
-  const parts = monthStr.split('-');
-  if (parts.length === 2) {
-    return `Tháng ${parseInt(parts[1], 10)}`;
-  }
-  return monthStr;
-};
+interface ApiOverviewStatistic {
+  totalAccounts: number;
+  totalEnrolledStudents: number;
+  totalTests: number;
+  totalCourses: number;
+  totalDocuments: number;
+  totalCompletedStudents: number;
+  totalStudyingStudents: number;
+  totalStudents: number;
+}
 
 const formatVND = (value: number): string => {
   return value.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
@@ -96,20 +87,18 @@ const StatisticsPage: React.FC = () => {
   const [revenueData, setRevenueData] = useState<DataPoint[]>([]);
   const [totalRevenue, setTotalRevenue] = useState<number>(0);
 
-  const [newStudentsData, setNewStudentsData] = useState<MonthlyData[]>([]);
-
-  const [examData, setExamData] = useState<ExamData[]>([]);
 
   const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
+  const [examCategoryData, setExamCategoryData] = useState<CategoryData[]>([]);
 
   const [courseData, setCourseData] = useState<CourseData[]>([]);
   const [totalStudents, setTotalStudents] = useState<number>(0);
-
-  // Growth metrics (placeholder – adjust if API provides these)
-  const [revenueGrowth, setRevenueGrowth] = useState<number>(0);
-  const [studentsGrowth, setStudentsGrowth] = useState<number>(0);
-  const [coursesGrowth, setCoursesGrowth] = useState<number>(0);
-  const [documentsGrowth, setDocumentsGrowth] = useState<number>(0);
+  const [totalEnrolledStudents, setTotalEnrolledStudents] = useState<number>(0);
+  const [totalCompletedStudents, setTotalCompletedStudents] = useState<number>(0);
+  const [totalStudyingStudents, setTotalStudyingStudents] = useState<number>(0);
+  const [totalCourses, setTotalCourses] = useState<number>(0);
+  const [totalTests, setTotalTests] = useState<number>(0);
+  const [totalAccounts, setTotalAccounts] = useState<number>(0);
 
   // Documents total placeholder
   const [totalDocuments, setTotalDocuments] = useState<number>(0);
@@ -125,56 +114,153 @@ const StatisticsPage: React.FC = () => {
     // ------------------ DUMMY DATA ------------------
     setLoading(true);
 
-    const dummyRevenue: DataPoint[] = [
-      { month: 'Tháng 1', value: 10000000, category: 'Doanh thu', formattedValue: formatVND(10000000) },
-      { month: 'Tháng 2', value: 8000000, category: 'Doanh thu', formattedValue: formatVND(8000000) },
-      { month: 'Tháng 3', value: 12000000, category: 'Doanh thu', formattedValue: formatVND(12000000) },
-    ];
-    setRevenueData(dummyRevenue);
-    setTotalRevenue(dummyRevenue.reduce((sum, r) => sum + r.value, 0));
+    const fetchStatistics = async () => {
+      setLoading(true);
+      try {
+        // 1) Fetch revenue (data-point)
+        const revenueRes = await axios.get<ApiResponse<ApiDataPoint>>("http://localhost:8080/api/dashboard/data-point", {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+          },
+        });
+        const revenueFromApi = revenueRes.data.data || [];
 
-    setNewStudentsData([
-      { month: 'Tháng 1', value: 120 },
-      { month: 'Tháng 2', value: 150 },
-      { month: 'Tháng 3', value: 180 },
-    ]);
+        const toVietnameseMonth = (ym: string) => {
+          // Expect format yyyy-mm or yyyy-m
+          const parts = ym.split("-");
+          const monthNumber = parts.length > 1 ? parseInt(parts[1], 10) : NaN;
+          return !isNaN(monthNumber) ? `Tháng ${monthNumber}` : ym;
+        };
+        const processedRevenue: DataPoint[] = revenueFromApi.map((item) => ({
+          month: toVietnameseMonth(item.month),
+          value: item.value,
+          category: "Doanh thu",
+          formattedValue: formatVND(item.value),
+        }));
 
-    setExamData([
-      { title: 'Đề Python cơ bản', image: 'https://img.icons8.com/color/48/000000/python.png', subject: 'Python', participants: 95 },
-      { title: 'Đề Java nâng cao', image: 'https://img.icons8.com/color/48/000000/java-coffee-cup-logo.png', subject: 'Java', participants: 80 },
-      { title: 'Đề HTML & CSS', image: 'https://img.icons8.com/color/48/000000/html-5.png', subject: 'Web', participants: 110 },
-    ]);
+        setRevenueData(processedRevenue);
+        setTotalRevenue(processedRevenue.reduce((sum, r) => sum + r.value, 0));
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error("[Statistics] Failed to fetch dashboard statistics", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStatistics();
 
-    setCategoryData([
-      { type: 'Lập trình', value: 60 },
-      { type: 'Thiết kế', value: 25 },
-      { type: 'Ngoại ngữ', value: 15 },
-    ]);
 
-    const dummyCourses: CourseData[] = [
-      { key: 'C1', name: 'Khóa ReactJS', students: 200, rating: 4.7, revenue: formatVND(9000000) },
-      { key: 'C2', name: 'Khóa NodeJS', students: 150, rating: 4.5, revenue: formatVND(7500000) },
-      { key: 'C3', name: 'Khóa UI/UX Design', students: 180, rating: 4.8, revenue: formatVND(8200000) },
-    ];
-    setCourseData(dummyCourses);
-    setTotalStudents(dummyCourses.reduce((s, c) => s + c.students, 0));
+    const fetchCategory = async () => {
+      const categoryRes = await axios.get<ApiResponse<ApiCategoryCourseData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/statistics/category-revenue?type=course`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+        },
+      });
+      const categoryFromApi = categoryRes.data.data || [];
+      setCategoryData(categoryFromApi.map(item => ({
+        type: item.category,
+        value: item.revenue,
+      })));
+    }
+    fetchCategory();
 
-    const dummyTop: TopCourse[] = dummyCourses.map(c => ({
-      id: c.key,
-      name: c.name,
-      students: c.students,
-      revenue: parseInt(c.revenue.replace(/\D/g, '')),
-      rating: c.rating,
-      status: 'active',
-      trend: 'stable',
-      author: 'Admin',
-    }));
-    setTopCourses(dummyTop);
+    // Fetch exam category (aggregate by subject)
+    const fetchExamCategory = async () => {
+      try {
+        const examRes = await axios.get<ApiResponse<ApiCategoryExamData>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/statistics/category-exam-revenue`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+          },
+        });
+        const examList = examRes.data.data || [];
 
-    setNewStudentList([
-      { id: 'S1', name: 'Nguyễn Văn A', enrollDate: '2025-05-01', courseName: 'Khóa ReactJS', paymentStatus: 'paid', amount: 1200000, source: 'Website' },
-      { id: 'S2', name: 'Trần Thị B', enrollDate: '2025-05-03', courseName: 'Khóa NodeJS', paymentStatus: 'pending', amount: 900000, source: 'Facebook' },
-    ]);
+        // Aggregate participants (or revenue if provided) by subject
+        const aggregationMap = new Map<string, number>();
+        examList.forEach((item) => {
+          const current = aggregationMap.get(item.courseName) || 0;
+          const revenue = item.revenue;
+          aggregationMap.set(item.courseName, current + revenue);
+        });
+
+        const aggregated: CategoryData[] = Array.from(aggregationMap.entries()).map(([courseName, revenue]) => ({
+          type: courseName,
+          value: revenue,
+        }));
+        setExamCategoryData(aggregated);
+      } catch (err) {
+        console.error("[Statistics] Failed to fetch exam category data", err);
+      }
+    };
+    fetchExamCategory();
+
+
+    const fetchCourseData = async () => {
+      try {
+        // Get token from local storage
+        const token = localStorage.getItem('authToken');
+
+        const response = await axios.get<ApiObjectResponse<ApiCourseDataDashboard>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/courses`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.data.status === 200) {
+          // Transform API data to match our CourseData interface
+          const transformedData: CourseData[] = response.data.data.courseData
+            .filter(item => item.studentCount > 0 || item.revenue > 0) // Filter out courses with no students and no revenue
+            // Sort by revenue in descending order first
+            .sort((a, b) => b.revenue - a.revenue)
+            .map(item => ({
+              key: item.key,
+              name: item.name,
+              students: item.studentCount,
+              rating: item.rating || 0, // Use 0 if rating is null
+              revenue: formatVND(item.revenue)
+            }));
+
+          setCourseData(transformedData);
+        }
+      } catch (error) {
+        console.error('Error fetching course data:', error);
+      }
+    };
+    fetchCourseData();
+
+    const fetchNewStudentList = async () => {
+      const newStudentListRes = await axios.get<ApiResponse<NewStudent>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/statistics/new-students`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+        },
+      });
+      const newStudentListFromApi = newStudentListRes.data.data || [];
+      setNewStudentList(newStudentListFromApi);
+    }
+    fetchNewStudentList();
+
+    // Tổng quan (students, documents ...)
+    const fetchOverviewStatistic = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        const res = await axios.get<ApiObjectResponse<ApiOverviewStatistic>>(`${process.env.REACT_APP_SERVER_HOST}/api/dashboard/statistics/statistic`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.data.status === 200) {
+          const stats = res.data.data;
+          setTotalStudents(stats.totalStudents);
+          setTotalEnrolledStudents(stats.totalEnrolledStudents);
+          setTotalDocuments(stats.totalDocuments);
+          setTotalCompletedStudents(stats.totalCompletedStudents);
+          setTotalStudyingStudents(stats.totalStudyingStudents);
+          setTotalCourses(stats.totalCourses);
+          setTotalTests(stats.totalTests);
+          setTotalAccounts(stats.totalAccounts);
+        }
+      } catch (err) {
+        console.error('[Statistics] Fetch overview statistic failed', err);
+      }
+    };
+    fetchOverviewStatistic();
 
     setLoading(false);
   }, []);
@@ -188,7 +274,7 @@ const StatisticsPage: React.FC = () => {
   };
 
   // Cột cho bảng khóa học hàng đầu
-  const topCoursesColumns: ColumnsType<TopCourse> = [
+  const topCoursesColumns: ColumnsType<CourseData> = [
     {
       title: 'Tên khóa học',
       dataIndex: 'name',
@@ -197,7 +283,7 @@ const StatisticsPage: React.FC = () => {
         <Space direction="vertical" size={0}>
           <Text strong>{text}</Text>
           <Text type="secondary" style={{ fontSize: '12px' }}>
-            Tác giả: {record.author}
+            Tác giả: {record.name}
           </Text>
         </Space>
       ),
@@ -214,7 +300,7 @@ const StatisticsPage: React.FC = () => {
       dataIndex: 'revenue',
       key: 'revenue',
       render: (value) => `${(value).toLocaleString()}đ`,
-      sorter: (a, b) => a.revenue - b.revenue,
+      sorter: (a, b) => Number(a.revenue.replace(/\D/g, '')) - Number(b.revenue.replace(/\D/g, '')),
       defaultSortOrder: 'descend',
     },
     {
@@ -227,45 +313,7 @@ const StatisticsPage: React.FC = () => {
         </Space>
       ),
       sorter: (a, b) => a.rating - b.rating,
-    },
-    {
-      title: 'Xu hướng',
-      dataIndex: 'trend',
-      key: 'trend',
-      render: (trend) => {
-        switch (trend) {
-          case 'up':
-            return <Tag icon={<RiseOutlined />} color="success">Tăng</Tag>;
-          case 'down':
-            return <Tag icon={<FallOutlined />} color="error">Giảm</Tag>;
-          case 'stable':
-            return <Tag color="default">Ổn định</Tag>;
-          default:
-            return <Tag color="default">{trend}</Tag>;
-        }
-      },
-      filters: [
-        { text: 'Tăng', value: 'up' },
-        { text: 'Giảm', value: 'down' },
-        { text: 'Ổn định', value: 'stable' },
-      ],
-      onFilter: (value, record) => record.trend === value,
-    },
-    {
-      title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status) => {
-        return status === 'active'
-          ? <Tag color="success">Đang hoạt động</Tag>
-          : <Tag color="error">Ngừng hoạt động</Tag>;
-      },
-      filters: [
-        { text: 'Đang hoạt động', value: 'active' },
-        { text: 'Ngừng hoạt động', value: 'inactive' },
-      ],
-      onFilter: (value, record) => record.status === value,
-    },
+    }
   ];
 
   // Cột cho bảng học viên mới
@@ -290,47 +338,46 @@ const StatisticsPage: React.FC = () => {
       sorter: (a, b) => a.courseName.localeCompare(b.courseName),
     },
     {
-      title: 'Nguồn',
-      dataIndex: 'source',
-      key: 'source',
-      filters: [
-        { text: 'Facebook', value: 'Facebook' },
-        { text: 'Google', value: 'Google' },
-        { text: 'Website', value: 'Website' },
-        { text: 'Giới thiệu', value: 'Giới thiệu' },
-        { text: 'Instagram', value: 'Instagram' },
-      ],
-      onFilter: (value, record) => record.source === value,
-    },
-    {
-      title: 'Thanh toán',
-      dataIndex: 'amount',
-      key: 'amount',
-      render: (amount) => `${amount.toLocaleString()}đ`,
-      sorter: (a, b) => a.amount - b.amount,
-    },
-    {
       title: 'Trạng thái',
-      dataIndex: 'paymentStatus',
-      key: 'paymentStatus',
+      dataIndex: 'enrollmentStatus',
+      key: 'enrollmentStatus',
       render: (status) => {
-        switch (status) {
-          case 'paid':
-            return <Tag color="success">Đã thanh toán</Tag>;
+        switch (status?.toLowerCase()) {
+          case 'actived':
+          case 'active':
+            return <Tag color="success">Đang học</Tag>;
           case 'pending':
-            return <Tag color="warning">Đang xử lý</Tag>;
-          case 'failed':
-            return <Tag color="error">Thất bại</Tag>;
+            return <Tag color="warning">Chờ xử lý</Tag>;
+          case 'completed':
+            return <Tag color="processing">Hoàn thành</Tag>;
           default:
             return <Tag color="default">{status}</Tag>;
         }
       },
       filters: [
-        { text: 'Đã thanh toán', value: 'paid' },
-        { text: 'Đang xử lý', value: 'pending' },
-        { text: 'Thất bại', value: 'failed' },
+        { text: 'Đang học', value: 'actived' },
+        { text: 'Chờ xử lý', value: 'pending' },
+        { text: 'Hoàn thành', value: 'completed' },
       ],
-      onFilter: (value, record) => record.paymentStatus === value,
+      onFilter: (value, record) => record.enrollmentStatus?.toLowerCase() === value,
+    },
+  ];
+
+  // Bảng Doanh thu danh mục (khóa học hoặc đề thi)
+  const categoryRevenueColumns: ColumnsType<CategoryData> = [
+    {
+      title: 'Danh mục',
+      dataIndex: 'type',
+      key: 'type',
+      sorter: (a, b) => a.type.localeCompare(b.type),
+    },
+    {
+      title: 'Doanh thu',
+      dataIndex: 'value',
+      key: 'value',
+      render: (v: number) => formatVND(v),
+      sorter: (a, b) => a.value - b.value,
+      defaultSortOrder: 'descend',
     },
   ];
 
@@ -394,7 +441,7 @@ const StatisticsPage: React.FC = () => {
         <Col xs={24} sm={12} md={6}>
           <Card loading={loading}>
             <Statistic
-              title="Doanh thu"
+              title="Tổng doanh thu"
               value={totalRevenue}
               precision={0}
               valueStyle={{ color: '#cf1322' }}
@@ -402,35 +449,29 @@ const StatisticsPage: React.FC = () => {
               suffix="đ"
               formatter={(value) => `${(Number(value) / 1000000).toFixed(2)}M`}
             />
-            <div style={{ marginTop: 8 }}>
-              {renderTrend(revenueGrowth)}
-            </div>
+           
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card loading={loading}>
             <Statistic
               title="Học viên"
-              value={totalStudents}
+              value={totalEnrolledStudents}
               valueStyle={{ color: '#1890ff' }}
               prefix={<UserOutlined />}
             />
-            <div style={{ marginTop: 8 }}>
-              {renderTrend(studentsGrowth)}
-            </div>
+            
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card loading={loading}>
             <Statistic
               title="Khóa học"
-              value={courseData.length}
+              value={totalCourses}
               valueStyle={{ color: '#52c41a' }}
               prefix={<BookOutlined />}
             />
-            <div style={{ marginTop: 8 }}>
-              {renderTrend(coursesGrowth)}
-            </div>
+            
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
@@ -441,9 +482,29 @@ const StatisticsPage: React.FC = () => {
               valueStyle={{ color: '#722ed1' }}
               prefix={<FileTextOutlined />}
             />
-            <div style={{ marginTop: 8 }}>
-              {renderTrend(documentsGrowth)}
-            </div>
+          
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card loading={loading}>
+            <Statistic
+              title="Đề thi"
+              value={totalTests}
+              valueStyle={{ color: '#1890ff' }}
+              prefix={<FileTextOutlined />}
+            />
+            
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card loading={loading}>
+            <Statistic
+              title="Tổng tài khoản"
+              value={totalAccounts}
+              valueStyle={{ color: '#1890ff' }}
+              prefix={<UserOutlined />}
+            />
+
           </Card>
         </Col>
       </Row>
@@ -476,45 +537,74 @@ const StatisticsPage: React.FC = () => {
             tab={<span><BarChartOutlined /> Doanh thu theo danh mục</span>}
             key="categories"
           >
-            <Row gutter={16}>
-              <Col span={12}>
+            <Tabs defaultActiveKey="courseCat" style={{ marginTop: 16 }}>
+              <TabPane tab="Khóa học" key="courseCat">
                 {loading ? (
                   <div style={{ textAlign: 'center', paddingTop: 120 }}>Đang tải dữ liệu...</div>
                 ) : (
-                  <Column
-                    data={categoryData}
-                    xField="type"
-                    yField="value"
-                    color="#52c41a"
-                    height={400}
-                    label={{ style: { fill: '#fff' } }}
-                  />
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Table
+                        columns={categoryRevenueColumns}
+                        dataSource={categoryData}
+                        rowKey="type"
+                        pagination={{ pageSize: 6 }}
+                        scroll={{ y: 320 }}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Pie
+                        data={categoryData}
+                        angleField="value"
+                        colorField="type"
+                        radius={0.8}
+                        innerRadius={0.5}
+                        height={400}
+                        legend={{ position: 'bottom' }}
+                        label={false}
+                      />
+                    </Col>
+                  </Row>
                 )}
-              </Col>
-              <Col span={12}>
+              </TabPane>
+              <TabPane tab="Đề thi" key="examCat">
                 {loading ? (
                   <div style={{ textAlign: 'center', paddingTop: 120 }}>Đang tải dữ liệu...</div>
                 ) : (
-                  <Pie
-                    data={categoryData}
-                    angleField="value"
-                    colorField="type"
-                    radius={0.8}
-                    innerRadius={0.5}
-                    height={400}
-                    legend={{ position: 'bottom' }}
-                    label={false}
-                  />
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Table
+                        columns={categoryRevenueColumns}
+                        dataSource={examCategoryData}
+                        rowKey="type"
+                        pagination={{ pageSize: 6 }}
+                        scroll={{ y: 320 }}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Pie
+                        data={examCategoryData}
+                        angleField="value"
+                        colorField="type"
+                        radius={0.8}
+                        innerRadius={0.5}
+                        height={400}
+                        legend={{ position: 'bottom' }}
+                        label={false}
+                      />
+                    </Col>
+                  </Row>
                 )}
-              </Col>
-            </Row>
+              </TabPane>
+            </Tabs>
           </TabPane>
           <TabPane tab="Khóa học hàng đầu" key="courses">
             <Table
               columns={topCoursesColumns}
-              dataSource={topCourses}
-              rowKey="id"
-              pagination={false}
+              dataSource={courseData}
+              rowKey="key"
+              pagination={{ pageSize: 6 }}
+              scroll={{ y: 320 }}
             />
           </TabPane>
           <TabPane tab="Học viên mới" key="students">
@@ -522,7 +612,8 @@ const StatisticsPage: React.FC = () => {
               columns={newStudentsColumns}
               dataSource={newStudentList}
               rowKey="id"
-              pagination={false}
+              pagination={{ pageSize: 6 }}
+              scroll={{ y: 320 }}
             />
           </TabPane>
         </Tabs>
@@ -534,8 +625,8 @@ const StatisticsPage: React.FC = () => {
           <Col span={8}>
             <Card bordered={false}>
               <Statistic
-                title="Tổng số học viên đã đăng ký"
-                value={totalStudents}
+                title="Tổng số học viên"
+                value={totalEnrolledStudents}
                 suffix="học viên"
               />
             </Card>
@@ -543,21 +634,30 @@ const StatisticsPage: React.FC = () => {
           <Col span={8}>
             <Card bordered={false}>
               <Statistic
-                title="Đã hoàn thành"
-                value={486}
-                suffix={`học viên (${calculatePercentage(486, totalStudents || 1)}%)`}
+                title="Tổng lượt đăng ký"
+                value={totalStudents}
+                suffix="lượt"
               />
-              <Progress percent={calculatePercentage(486, totalStudents || 1)} status="active" />
+            </Card>
+          </Col>
+          <Col span={8}>
+            <Card bordered={false}>
+              <Statistic
+                title="Đã hoàn thành"
+                value={totalCompletedStudents}
+                suffix={`học viên (${calculatePercentage(totalCompletedStudents, totalStudents || 1)}%)`}
+              />
+              <Progress percent={calculatePercentage(totalCompletedStudents, totalStudents || 1)} status="active" />
             </Card>
           </Col>
           <Col span={8}>
             <Card bordered={false}>
               <Statistic
                 title="Đang học"
-                value={356}
-                suffix={`học viên (${calculatePercentage(356, totalStudents || 1)}%)`}
+                value={totalStudyingStudents}
+                suffix={`học viên (${calculatePercentage(totalStudyingStudents, totalStudents || 1)}%)`}
               />
-              <Progress percent={calculatePercentage(356, totalStudents || 1)} status="active" strokeColor="#1890ff" />
+              <Progress percent={calculatePercentage(totalStudyingStudents, totalStudents || 1)} status="active" strokeColor="#1890ff" />
             </Card>
           </Col>
         </Row>
