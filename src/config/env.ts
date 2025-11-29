@@ -47,7 +47,7 @@ export const POSTS = {
   UPDATE: (id: string) => `${API_BASE_URL}/posts/${id}`,
   DELETE: (id: string) => `${API_BASE_URL}/posts/${id}`,
 };
-
+   
 // Courses endpoints
 export const COURSES = {
   GET_ALL: `${API_BASE_URL}/courses`,
